@@ -67,6 +67,7 @@ async def handle_client(reader, writer):
         print(f"Error with client {addr}: {e}")
     finally:
         print(f"Closing connection for {addr}")
+        plt.close()
         writer.close()
         await writer.wait_closed()
 
