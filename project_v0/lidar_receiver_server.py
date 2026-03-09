@@ -1,0 +1,111 @@
+PORT = 12345
+
+
+import matplotlib.pyplot as plt
+import numpy as np
+import math
+import struct
+plt.ion()
+
+# structure:
+# i of length
+# list of doubles: angles 
+# list of doubles: distances 
+
+
+import socket 
+import asyncio
+
+async def handle_client(reader, writer):
+    addr = writer.get_extra_info('peername')
+    print(f"Connected by {addr}")
+
+    fig, ax = plt.subplots()
+
+
+    try:
+
+        while True:
+            length_data = await reader.readexactly(4)
+            list_length = struct.unpack('i', length_data)[0]
+
+            angles_data = await reader.readexactly(list_length * 8)
+            angles = np.array(struct.unpack(f'{list_length}d', angles_data))
+
+            
+            distances_data = await reader.readexactly(list_length * 8)
+            distances = np.array(struct.unpack(f'{list_length}d', distances_data))
+
+                
+            # make sure it's numpy arrays
+            angles, distances = scan_data 
+            xs = distances * np.cos(angles*np.pi/180)
+            ys = distances * np.sin(angles*np.pi/180) 
+            
+            #line.set_xdata(xs)
+            #line.set_ydata(ys)
+            #ax.relim(); 
+            xys = np.array([xs,ys]).swapaxes(0,1)
+            #print(xys.dtype)
+            mask = ((xys==[0.0,0.0]) | (xys<-1500) | (xys>1500)).all(axis=1)
+            xys = xys[~mask]
+            ax.clear()
+            ax.hexbin(xys[:,1], xys[:,0], gridsize=100)
+            ax.set_xlim((-1500,1500))
+            ax.set_ylim((-1500,1500))
+            ax.autoscale_view(); plt.draw(); plt.pause(0.001)
+
+            
+            # Sleep briefly to allow for a smoother display and to prevent overwhelming the terminal with updates. Adjust as needed for performance.
+            time.sleep(0.01)
+
+            
+
+    except asyncio.CancelledError:
+        print(f"Client handler task cancelled for {addr}")
+    except Exception as e:
+        print(f"Error with client {addr}: {e}")
+    finally:
+        print(f"Closing connection for {addr}")
+        writer.close()
+        await writer.wait_closed()
+
+async def main():
+    server = await asyncio.start_server(
+        handle_client, '127.0.0.1', PORT)
+
+    addrs = ', '.join(str(sock.getsockname()) for sock in server.sockets)
+    print(f'Serving on {addrs}')
+
+    # Run the server indefinitely
+    async with server:
+        await server.serve_forever()
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("Server stopped manually.")
+
+
+
+
+'''
+import socket             
+
+s = socket.socket()
+
+
+s.bind(('', PORT))
+s.listen(5)
+print("Listening...")
+
+c, addr = s.accept()
+print ('Got connection from', addr)
+
+c.send('Thank you for connecting'.encode()) 
+
+
+
+c.close()
+'''
