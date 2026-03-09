@@ -109,9 +109,25 @@ static volatile uint8_t rx_tail = 0;   // consumer reads from here
 //     (that state means "empty").
 //
 bool txEnqueue(const uint8_t *data, uint8_t len) {
-  // YOUR CODE HERE
-  return false;
+  uint8_t local_head;
+  uint8_t local_tail;
+  local_head = tx_head;
+  local_tail = tx_tail;
+  uint8_t used = (local_head - local_tail) & TX_BUFFER_MASK;
+  uint8_t free = TX_BUFFER_SIZE - 1 - used;
+  if(len > free){
+    return false;
+  }else{
+    for(int i = 0; i < len; i++){
+      tx_buf[local_head] = data[i];
+      local_head = (local_head + 1) & TX_BUFFER_MASK;
+    }
+    tx_head = local_head;
+    UCSR0B |= (1 << UDRIE0);
+    return true;
+  }
 }
+
 
 // ============================================================
 // TODO Part B: USART Data Register Empty ISR
