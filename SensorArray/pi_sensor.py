@@ -64,11 +64,13 @@ PACKET_TYPE_MESSAGE  = 2
 COMMAND_ESTOP  = 0
 # TODO (Activity 2): define your own command type for the color sensor here.
 # It must match the value you add to TCommandType in packets.h.
+COMMAND_COLOR_SENSOR = 1
 
 RESP_OK     = 0
 RESP_STATUS = 1
 # TODO (Activity 2): define your own response type for the color sensor here.
 # It must match the value you add to TResponseType in packets.h.
+RESP_COLOR_SENSOR = 2
 
 STATE_RUNNING = 0
 STATE_STOPPED = 1
@@ -223,10 +225,15 @@ def printPacket(pkt):
                 print("Status: RUNNING")
             else:
                 print("Status: STOPPED")
-        else:
+        elif cmd == RESP_COLOR_SENSOR:
             # TODO (Activity 2): add an elif branch here to handle your color
             # response.  Display the three channel frequencies in Hz, e.g.:
             #   R: <params[0]> Hz, G: <params[1]> Hz, B: <params[2]> Hz
+            r = pkt['params'][0]
+            g = pkt['params'][1]
+            b = pkt['params'][2]
+            print(f"Color: R={r} Hz, G={g} Hz, B={b} Hz")
+        else:
             print(f"Response: unknown command {cmd}")
         # Print the optional debug string from the data field.
         # On the Arduino side, fill pkt.data before calling sendFrame() to
