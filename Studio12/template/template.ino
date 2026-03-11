@@ -132,7 +132,7 @@ void handleCommand(TPacket *pkt) {
 //   STATE_RUNNING + button pressed  -> STATE_STOPPED; stateChanged = true
 //   STATE_STOPPED + button released -> STATE_RUNNING; stateChanged = true
 //
-ISR(INT0_vect) {
+ISR(INT5_vect) {
   buttonInterrupt = true;
 }
 
@@ -145,7 +145,7 @@ void setup() {
   cli();
   EICRB = 0b00000100;
   EIMSK = 0b00100000;
-  pinMode(21, INPUT);
+  pinMode(3, INPUT);
  // TODO (Activity 3a): Enable the button to fire an interrupt on any
   // logical change (both rising and falling edges).
   sei();
@@ -157,12 +157,11 @@ void setup() {
 
 void loop() {
   if(buttonInterrupt) {
-    buttonInterrupt = false;
 
-    int state = digitalRead(3);
 
     if(millis() - lastDebounceTime > 50) {
       lastDebounceTime = millis();
+      int state = digitalRead(3);
 
       if(state == HIGH && buttonState == STATE_RUNNING) {
         buttonState = STATE_STOPPED;
@@ -173,6 +172,7 @@ void loop() {
         stateChanged = true;
       }
     }
+    buttonInterrupt = false;
   }
 
   // Check for incoming command packets from the Pi.
