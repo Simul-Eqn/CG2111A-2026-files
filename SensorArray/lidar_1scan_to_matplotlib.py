@@ -46,7 +46,7 @@ if __name__ == "__main__":
 
     try:
         
-        while True:
+        if True:
             # Retrieve and print the LiDAR device information
             status = lidarStatus(lidar)
             
@@ -58,7 +58,8 @@ if __name__ == "__main__":
             packed_data += struct.pack(f'{len(scan_data[0])}d', *scan_data[0])
             packed_data += struct.pack(f'{len(scan_data[1])}d', *scan_data[1])
 
-            s.sendall(packed_data) 
+            s.sendall(packed_data)
+
 
     except KeyboardInterrupt:
         # Move to bottom of the scan area for clean exit
