@@ -158,6 +158,14 @@ void setup() {
   cli();
   EICRB = 0b00000100;
   EIMSK = 0b00100000;
+
+  TCCR1A = 0;          // normal mode
+  TCCR1B = 0;
+
+  TCNT1 = 0;           // reset counter
+
+  TCCR1B |= (1 << CS11) | (1 << CS10);   // prescaler = 64
+
   pinMode(3, INPUT);
  // TODO (Activity 3a): Enable the button to fire an interrupt on any
   // logical change (both rising and falling edges).
