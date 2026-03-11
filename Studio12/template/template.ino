@@ -60,7 +60,6 @@ volatile TButtonState buttonState  = STATE_RUNNING;
 volatile bool         stateChanged = false;
 
 unsigned long lastDebounceTime = 0;
-volatile bool buttonInterrupt = false;
 
 // ============================================================
 // PACKET UTILITIES
@@ -133,7 +132,21 @@ void handleCommand(TPacket *pkt) {
 //   STATE_STOPPED + button released -> STATE_RUNNING; stateChanged = true
 //
 ISR(INT5_vect) {
-  buttonInterrupt = true;
+  uint16_t timeCurrent = TCNT1;
+
+  if(timeCurrent - lastDebounceTime > 50) {
+    lastDebounceTime = timeCurrent;
+    int state = digitalRead(3);
+
+    if(state == HIGH && buttonState == STATE_RUNNING) {
+      buttonState = STATE_STOPPED;
+      stateChanged = true;
+    } 
+    else if(state == LOW && buttonState == STATE_STOPPED) {
+      buttonState = STATE_RUNNING;
+      stateChanged = true;
+    }
+  }
 }
 
 // ============================================================
@@ -156,24 +169,6 @@ void setup() {
 // ============================================================
 
 void loop() {
-  if(buttonInterrupt) {
-
-
-    if(millis() - lastDebounceTime > 50) {
-      lastDebounceTime = millis();
-      int state = digitalRead(3);
-
-      if(state == HIGH && buttonState == STATE_RUNNING) {
-        buttonState = STATE_STOPPED;
-        stateChanged = true;
-      } 
-      else if(state == LOW && buttonState == STATE_STOPPED) {
-        buttonState = STATE_RUNNING;
-        stateChanged = true;
-      }
-    }
-    buttonInterrupt = false;
-  }
 
   // Check for incoming command packets from the Pi.
   TPacket incoming;
