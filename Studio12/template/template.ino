@@ -135,7 +135,7 @@
   ISR(INT5_vect) {
     uint16_t timeCurrent = TCNT1;
 
-    if(timeCurrent - lastDebounceTime > 250) {
+    if(timeCurrent - lastDebounceTime > 750) {
       lastDebounceTime = timeCurrent;
       int state = digitalRead(3);
 
