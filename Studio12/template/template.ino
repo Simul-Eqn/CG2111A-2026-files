@@ -59,7 +59,7 @@ typedef enum {
 volatile TButtonState buttonState  = STATE_RUNNING;
 volatile bool         stateChanged = false;
 
-unsigned long lastDebounceTime = 0;
+volatile uint16_t lastDebounceTime = 0;
 volatile bool buttonInterrupt = false;
 
 // ============================================================
@@ -133,7 +133,22 @@ void handleCommand(TPacket *pkt) {
 //   STATE_STOPPED + button released -> STATE_RUNNING; stateChanged = true
 //
 ISR(INT0_vect) {
-  buttonInterrupt = true;
+
+  uint16_t timeCurrent = TCNT1;
+
+  if(timeCurrent - lastDebounceTime > 2500) {
+    lastDebounceTime = timeCurrent;
+    int state = PIND & (1 << PD2);
+
+    if(state == HIGH && buttonState == STATE_RUNNING) {
+      buttonState = STATE_STOPPED;
+      stateChanged = true;
+    } 
+    else if(state == LOW && buttonState == STATE_STOPPED) {
+      buttonState = STATE_RUNNING;
+      stateChanged = true;
+    }
+  }
 }
 
 // ============================================================
@@ -155,24 +170,6 @@ void setup() {
 // ============================================================
 
 void loop() {
-  if(buttonInterrupt) {
-    buttonInterrupt = false;
-
-    int state = digitalRead(2);
-
-    if(millis() - lastDebounceTime > 50) {
-      lastDebounceTime = millis();
-
-      if(state == HIGH && buttonState == STATE_RUNNING) {
-        buttonState = STATE_STOPPED;
-        stateChanged = true;
-      } 
-      else if(state == LOW && buttonState == STATE_STOPPED) {
-        buttonState = STATE_RUNNING;
-        stateChanged = true;
-      }
-    }
-  }
 
   // Check for incoming command packets from the Pi.
   TPacket incoming;
