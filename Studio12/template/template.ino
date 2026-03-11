@@ -134,7 +134,7 @@ void handleCommand(TPacket *pkt) {
 ISR(INT5_vect) {
   uint16_t timeCurrent = TCNT1;
 
-  if(timeCurrent - lastDebounceTime > 100) {
+  if(timeCurrent - lastDebounceTime > 250) {
     lastDebounceTime = timeCurrent;
     int state = digitalRead(3);
 
