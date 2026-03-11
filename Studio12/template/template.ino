@@ -143,8 +143,8 @@ ISR(INT0_vect) {
 void setup() {
   Serial.begin(9600);
   cli();
-  EICRA = 0b00000001;
-  EIMSK = 0b00000001;
+  EICRB = 0b00000100;
+  EIMSK = 0b00100000;
   pinMode(21, INPUT);
  // TODO (Activity 3a): Enable the button to fire an interrupt on any
   // logical change (both rising and falling edges).
@@ -159,7 +159,7 @@ void loop() {
   if(buttonInterrupt) {
     buttonInterrupt = false;
 
-    int state = digitalRead(21);
+    int state = digitalRead(3);
 
     if(millis() - lastDebounceTime > 50) {
       lastDebounceTime = millis();
