@@ -21,10 +21,7 @@ import serial
 import time
 import sys
 import select
-
-import camera_handler as CameraHandler  
-import lidar_scanner as LidarScanner
-
+import alex_camera
 
 # ----------------------------------------------------------------
 # SERIAL PORT SETUP
@@ -254,6 +251,9 @@ def handleColorCommand():
     Otherwise, send your color command to the Arduino.
     """
     # TODO
+    if isEstopActive():
+        print("Refused: E-Stop is active")
+        return
     pass
 
 
@@ -261,8 +261,9 @@ def handleColorCommand():
 # ACTIVITY 3: CAMERA
 # ----------------------------------------------------------------
 
+# TODO (Activity 3): import the camera library provided (alex_camera.py).
 
-#_camera = None          # TODO (Activity 3): open the camera (cameraOpen()) before first use.
+_camera = None          # TODO (Activity 3): open the camera (cameraOpen()) before first use.
 _frames_remaining = 5   # frames remaining before further captures are refused
 
 
@@ -273,32 +274,43 @@ def handleCameraCommand():
     Gate on E-Stop state and the remaining frame count.
     Use captureGreyscaleFrame() and renderGreyscaleFrame() from alex_camera.
     """
-    global _frames_remaining
-    # TODO check E-Stop state
-
-    if _frames_remaining == 0:
-        print("Could not capture frame: no frames remaining")
+    global _frames_remaining, _camera
+    # TODO
+    pass
+    if isEstopActive():
+        print("Refused: E-Stop is active")
+        return
+    if _frames_remaining <= 0:
+        print("Refused: no camera frames remaining")
         return
 
-    if CameraHandler.camera_capture(): # if succes 
-        _frames_remaining -= 1 
+    frame = alex_camera.captureGreyscaleFrame(_camera)
+    alex_camera.renderGreyscaleFrame(frame)
+
+    _frames_remaining -= 1
+    print(f"Frames remaining: {_frames_remaining}")
 
 
 # ----------------------------------------------------------------
 # ACTIVITY 4: LIDAR
 # ----------------------------------------------------------------
 
+# TODO (Activity 4): import from lidar.alex_lidar and lidar_example_cli_plot
+#   (lidar_example_cli_plot.py is in the same folder; alex_lidar.py is in lidar/).
+
 
 def handleLidarCommand():
     """
-    Activity 4: perform a single LIDAR scan and render it.
+    TODO (Activity 4): perform a single LIDAR scan and render it.
 
     Gate on E-Stop state, then use the LIDAR library to capture one scan
     and the CLI plot helpers to display it.
     """
-    # TODO check E-Stop state
-    
-    LidarScanner.lidar_scan() 
+    # TODO
+    pass
+    if isEstopActive():
+        print("Refused: E-Stop is active")
+        return
 
 
 # ----------------------------------------------------------------
@@ -322,6 +334,8 @@ def handleUserInput(line):
     if line == 'e':
         print("Sending E-Stop command...")
         sendCommand(COMMAND_ESTOP, data=b'This is a debug message')
+    elif line == 'p':
+        handleCameraCommand()
     # TODO (Activity 2): add an elif branch for 'c' (color sensor) that calls handleColorCommand().
     # TODO (Activities 3 & 4): add elif branches for 'p' (camera) and 'l' (LIDAR).
     else:
@@ -361,14 +375,14 @@ def runCommandInterface():
 
 if __name__ == '__main__':
     openSerial()
-    LidarScanner.lidar_connect()
-    #_camera = alex_camera.cameraOpen()
-    Camerahandler.camera_connect() 
+    _camera = alex_camera.cameraOpen()
     try:
         runCommandInterface()
     except KeyboardInterrupt:
         print("\nExiting.")
     finally:
-        LidarScanner.lidar_disconnect()
-        CameraHandler.camra_close()
+        # TODO (Activities 3 & 4): close the camera and disconnect the LIDAR here if you opened them.
+        closeSerial()
+        if _camera is not None:
+            alex_camera.cameraClose(_camera)
         closeSerial()
