@@ -253,6 +253,9 @@ def handleColorCommand():
     Check the E-Stop state first; if stopped, refuse with a clear message.
     Otherwise, send your color command to the Arduino.
     """
+    if isEstopActive():
+        print("Refused: E-Stop is active")
+        return
     # TODO
     pass
 
@@ -274,7 +277,10 @@ def handleCameraCommand():
     Use captureGreyscaleFrame() and renderGreyscaleFrame() from alex_camera.
     """
     global _frames_remaining
-    # TODO check E-Stop state
+
+    if isEstopActive():
+        print("Refused: E-Stop is active")
+        return
 
     if _frames_remaining == 0:
         print("Could not capture frame: no frames remaining")
@@ -296,7 +302,10 @@ def handleLidarCommand():
     Gate on E-Stop state, then use the LIDAR library to capture one scan
     and the CLI plot helpers to display it.
     """
-    # TODO check E-Stop state
+
+    if isEstopActive():
+        print("Refused: E-Stop is active")
+        return
     
     LidarScanner.lidar_scan() 
 
@@ -323,7 +332,13 @@ def handleUserInput(line):
         print("Sending E-Stop command...")
         sendCommand(COMMAND_ESTOP, data=b'This is a debug message')
     # TODO (Activity 2): add an elif branch for 'c' (color sensor) that calls handleColorCommand().
+    elif line == 'c':
+        handleColorCommand() 
     # TODO (Activities 3 & 4): add elif branches for 'p' (camera) and 'l' (LIDAR).
+    elif line == 'p':
+        handleCameraCommand()
+    elif line == 'l':
+        handleLidarCommand() 
     else:
         print(f"Unknown input: '{line}'. Valid: e, c, p, l")
 
