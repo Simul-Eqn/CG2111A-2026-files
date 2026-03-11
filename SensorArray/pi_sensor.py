@@ -386,7 +386,7 @@ if __name__ == '__main__':
     openSerial()
     LidarScanner.lidar_connect()
     #_camera = alex_camera.cameraOpen()
-    Camerahandler.camera_connect() 
+    CameraHandler.camera_connect() 
     try:
         runCommandInterface()
     except KeyboardInterrupt:

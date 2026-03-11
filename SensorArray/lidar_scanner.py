@@ -58,7 +58,7 @@ def lidar_scan():
         #sys.stdout.write("\n" * 2)
         print("Scan stopped by user.")
     finally:
-        s.sendall(struct.pack('i' -1)) # -1 is exit 
+        s.sendall(struct.pack('i', -1)) # -1 is exit 
         s.close() 
         #ui_show_cursor()
         sys.stdout.flush()
