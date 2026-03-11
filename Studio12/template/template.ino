@@ -60,7 +60,7 @@
   volatile bool         stateChanged = false;
 
   uint16_t lastDebounceTime = 0;
-  volatile bool currentStatus = true;
+  bool currentStatus = true;
 
   // ============================================================
   // PACKET UTILITIES
@@ -144,12 +144,12 @@
         stateChanged = true;
       }
       else if (state == LOW && buttonState == STATE_STOPPED && currentStatus == true) {
-        currentStatus == false;
+        currentStatus = false;
       }
       else if(state == LOW && buttonState == STATE_STOPPED && currentStatus == false) {
         buttonState = STATE_RUNNING;
         stateChanged = true;
-        currentStatus == true;
+        currentStatus = true;
       }
     }
   }
