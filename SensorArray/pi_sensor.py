@@ -37,11 +37,14 @@ _ser = None
 
 
 def openSerial():
-    """Open the serial port and wait for the Arduino to boot."""
     global _ser
-    _ser = serial.Serial(PORT, BAUDRATE, timeout=5)
+    _ser = serial.Serial(PORT, BAUDRATE, timeout=0.2)
     print(f"Opened {PORT} at {BAUDRATE} baud. Waiting for Arduino...")
     time.sleep(2)
+
+    _ser.reset_input_buffer()
+    _ser.reset_output_buffer()
+
     print("Ready.\n")
 
 
@@ -444,5 +447,5 @@ if __name__ == '__main__':
         print("\nExiting.")
     finally:
         LidarScanner.lidar_disconnect()
-        CameraHandler.camra_close()
+        CameraHandler.camera_close()
         closeSerial()

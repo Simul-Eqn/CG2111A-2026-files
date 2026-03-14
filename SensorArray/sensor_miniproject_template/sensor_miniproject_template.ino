@@ -36,7 +36,8 @@ typedef enum dir
 #define BACK_LEFT    3
 #define BACK_RIGHT   2
 
-volatile uint16_t timer2_ticks = 0; 
+volatile uint16_t debounce_ms = 0; 
+volatile uint16_t color_ms = 0; 
 
 AF_DCMotor motorFL(FRONT_LEFT);
 AF_DCMotor motorFR(FRONT_RIGHT);
@@ -95,12 +96,12 @@ volatile bool   stateChanged = false;
  * in setup() -- check the ATMega2560 datasheet for the correct
  * registers for your chosen pin.
  */
- ISR(INT5_vect) { // this resets timer 2 ticks 
+ ISR(INT3_vect) { // this resets timer 2 ticks 
 
-    if(timer2_ticks > 2) { // 2 ms 
-      timer2_ticks = 0; 
+    if (debounce_ms > 20) { // 20 ms 
+      debounce_ms = 0; 
 
-      int state = (PINE & (1 << 5));
+      int state = (PIND & (1 << 3));
 
       if(state && buttonState == STATE_RUNNING && currentStatus == true) {
         buttonState = STATE_STOPPED;
@@ -142,9 +143,9 @@ static void INIT_COLOR_SENSOR() {
     // PH0 = S2, PH1 = S3 -> outputs
     DDRH |= (1 << DDH0) | (1 << DDH1);
 
-    // 20% output scaling: S0 = HIGH, S1 = LOW
-    PORTJ |=  (1 << PJ1);   // S0 high
-    PORTJ &= ~(1 << PJ0);   // S1 low
+    // 20% output scaling: S1 = HIGH, S0 = LOW
+    PORTJ |=  (1 << PJ1);   // S1 high
+    PORTJ &= ~(1 << PJ0);   // S0 low
 
     // init timer 2 
 }
@@ -173,12 +174,11 @@ static uint32_t measureChannel100ms() {
     // OUT is on PD0
     uint8_t lastState = (PINK & (1 << PINK0));
 
-    // can set timer2_ticks to a value>250 like 300 to avoid integer overflow 
-    if (timer2_ticks > 300) timer2_ticks = 300; 
-    uint16_t start = timer2_ticks;
+    // can set color_ms to a value>250 like 300 to avoid integer overflow 
+    color_ms = 0;
 
     // 100 ms 
-    while ((uint16_t)(timer2_ticks - start) < 100) {
+    while (color_ms < 100) {
         uint8_t nowState = (PINK & (1 << PINK0));
 
         // count rising edge
@@ -291,6 +291,8 @@ static void handleCommand(const TPacket *cmd) {
                 sendFrame(&pkt);
             }
             sendStatus(STATE_STOPPED);
+            stop();
+            sendMotorStatus(motorSpeed);
             break;
 
         case COMMAND_COLOR_SENSOR: {
@@ -363,10 +365,12 @@ void setup() {
     // then call sei() to enable global interrupts.
     cli();
 
-    
-    EICRB = 0b00000100;
-    EIMSK = 0b00100000;
-    DDRE &= ~(1 << 5);
+    EICRA = 0b01000000;
+    //EICRB = 0b00000100;
+    //EIMSK = 0b00100000;
+    EIMSK = 0b00001000; 
+    //DDRE &= ~(1 << 5);
+    DDRD &= ~(1<<3); 
 
 
     // init timer 2 counter used for all 
@@ -393,12 +397,13 @@ void setup() {
   // TODO (Activity 3a): Enable the button to fire an interrupt on any
     // logical change (both rising and falling edges).
     sei();
-
+    TCNT2 = 0; 
     TCCR2B = 0b101; // start timer 2 ticking 
 }
 
 ISR(TIMER2_COMPA_vect) { // this'll automatically reset timer2 
-    timer2_ticks ++; 
+    debounce_ms ++; 
+    color_ms ++; 
 }
 
 void loop() {
