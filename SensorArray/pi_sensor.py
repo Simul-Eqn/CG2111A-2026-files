@@ -65,12 +65,19 @@ COMMAND_ESTOP  = 0
 # TODO (Activity 2): define your own command type for the color sensor here.
 # It must match the value you add to TCommandType in packets.h.
 COMMAND_COLOR_SENSOR = 1
+COMMAND_FORWARD = 2
+COMMAND_BACKWARD = 3
+COMMAND_LEFT = 4
+COMMAND_RIGHT = 5
+COMMAND_SET_SPEED = 6
+COMMAND_STOP = 7
 
 RESP_OK     = 0
 RESP_STATUS = 1
 # TODO (Activity 2): define your own response type for the color sensor here.
 # It must match the value you add to TResponseType in packets.h.
 RESP_COLOR_SENSOR = 2
+RESP_MOTOR_STATUS = 3
 
 STATE_RUNNING = 0
 STATE_STOPPED = 1
@@ -81,6 +88,9 @@ PARAMS_COUNT = 16
 TPACKET_SIZE = 1 + 1 + 2 + MAX_STR_LEN + (PARAMS_COUNT * 4)  # = 100
 TPACKET_FMT  = f'<BB2x{MAX_STR_LEN}s{PARAMS_COUNT}I'
 
+
+# motor speed initialize
+motor_speed = 150
 # ----------------------------------------------------------------
 # RELIABLE FRAMING: magic number + XOR checksum
 # ----------------------------------------------------------------
@@ -233,6 +243,9 @@ def printPacket(pkt):
             g = pkt['params'][1]
             b = pkt['params'][2]
             print(f"Color: R={r} Hz, G={g} Hz, B={b} Hz")
+        elif cmd == RESP_MOTOR_STATUS:
+            speed = pkt['params'][0]
+            print(f"Motor speed: {speed}")
         else:
             print(f"Response: unknown command {cmd}")
         # Print the optional debug string from the data field.
@@ -263,9 +276,7 @@ def handleColorCommand():
     if isEstopActive():
         print("Refused: E-Stop is active")
         return
-    # TODO
     sendCommand(COMMAND_COLOR_SENSOR)
-    pass
 
 
 # ----------------------------------------------------------------
@@ -315,7 +326,45 @@ def handleLidarCommand():
         print("Refused: E-Stop is active")
         return
     
-    LidarScanner.lidar_scan() 
+    LidarScanner.lidar_scan()
+
+
+def handleDriveCommand(line):
+    global motor_speed
+
+    if isEstopActive():
+        print("Refused: E-Stop is active")
+        return
+
+    if line == 'w':
+        print("Driving forward...")
+        sendCommand(COMMAND_FORWARD)
+
+    elif line == 's':
+        print("Driving backward...")
+        sendCommand(COMMAND_BACKWARD)
+
+    elif line == 'a':
+        print("Turning left...")
+        sendCommand(COMMAND_LEFT)
+
+    elif line == 'd':
+        print("Turning right...")
+        sendCommand(COMMAND_RIGHT)
+
+    elif line == 'x':
+        print("Stopping motors...")
+        sendCommand(COMMAND_STOP)
+
+    elif line == '+':
+        motor_speed = min(255, motor_speed + 20)
+        print(f"Setting motor speed to {motor_speed}...")
+        sendCommand(COMMAND_SET_SPEED, params=[motor_speed] + [0] * (PARAMS_COUNT - 1))
+
+    elif line == '-':
+        motor_speed = max(0, motor_speed - 20)
+        print(f"Setting motor speed to {motor_speed}...")
+        sendCommand(COMMAND_SET_SPEED, params=[motor_speed] + [0] * (PARAMS_COUNT - 1))
 
 
 # ----------------------------------------------------------------
@@ -330,25 +379,24 @@ def handleLidarCommand():
 
 
 def handleUserInput(line):
-    """
-    Dispatch a single line of user input.
-
-    The 'e' case is pre-wired to send a software E-Stop command.
-    TODO (Activities 2, 3 & 4): add 'c' (color), 'p' (camera) and 'l' (LIDAR).
-    """
     if line == 'e':
         print("Sending E-Stop command...")
         sendCommand(COMMAND_ESTOP, data=b'This is a debug message')
-    # TODO (Activity 2): add an elif branch for 'c' (color sensor) that calls handleColorCommand().
+
     elif line == 'c':
-        handleColorCommand() 
-    # TODO (Activities 3 & 4): add elif branches for 'p' (camera) and 'l' (LIDAR).
+        handleColorCommand()
+
     elif line == 'p':
         handleCameraCommand()
+
     elif line == 'l':
-        handleLidarCommand() 
+        handleLidarCommand()
+
+    elif line in ['w', 'a', 's', 'd', 'x', '+', '-']:
+        handleDriveCommand(line)
+
     else:
-        print(f"Unknown input: '{line}'. Valid: e, c, p, l")
+        print("Unknown input. Valid: e, c, p, l, w, a, s, d, x, +, -")
 
 
 def runCommandInterface():
@@ -358,7 +406,10 @@ def runCommandInterface():
     Uses select.select() to simultaneously receive packets from the Arduino
     and read typed user input from stdin without either blocking the other.
     """
-    print("Sensor interface ready. Type e / c / p / l and press Enter.")
+    print("Sensor interface ready.")
+    print("Type e / c / p / l / w / a / s / d / x / + / - and press Enter.")
+    print("e = estop, c = color, p = camera, l = lidar")
+    print("w = forward, s = backward, a = left, d = right, x = stop, + = faster, - = slower")
     print("Press Ctrl+C to exit.\n")
 
     while True:

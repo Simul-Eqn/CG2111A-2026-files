@@ -20,6 +20,28 @@
 
 #include "packets.h"
 #include "serial_driver.h"
+#include <AFMotor.h>
+#include <util/delay.h>
+typedef enum dir
+{
+  STOP,
+  GO,
+  BACK,
+  CCW,
+  CW
+} dir;
+
+#define FRONT_LEFT   4
+#define FRONT_RIGHT  1
+#define BACK_LEFT    3
+#define BACK_RIGHT   2
+
+AF_DCMotor motorFL(FRONT_LEFT);
+AF_DCMotor motorFR(FRONT_RIGHT);
+AF_DCMotor motorBL(BACK_LEFT);
+AF_DCMotor motorBR(BACK_RIGHT);
+
+int motorSpeed = 150;
 uint16_t lastDebounceTime = 0; //debounce variable
 bool currentStatus = true;     //helper variable for INT5 ISR
 // =============================================================
@@ -45,7 +67,13 @@ static void sendResponse(TResponseType resp, uint32_t param) {
 static void sendStatus(TState state) {
     sendResponse(RESP_STATUS, (uint32_t)state);
 }
+static void sendOk() {
+    sendResponse(RESP_OK, 0);
+}
 
+static void sendMotorStatus(uint32_t speed) {
+    sendResponse(RESP_MOTOR_STATUS, speed);
+}
 // =============================================================
 // E-Stop state machine
 // =============================================================
@@ -158,6 +186,57 @@ static void readColorChannels(uint32_t *r, uint32_t *g, uint32_t *b) {
     _delay_ms(5);
     *b = measureChannel100ms() * 10;   // Hz
 }
+// =============================================================
+// motor
+// =============================================================
+void move(int speed, int direction)
+{
+  motorFL.setSpeed(speed);
+  motorFR.setSpeed(speed);
+  motorBL.setSpeed(speed);
+  motorBR.setSpeed(speed);
+
+  switch(direction)
+  {
+    case BACK:
+      motorFL.run(BACKWARD);
+      motorFR.run(BACKWARD);
+      motorBL.run(FORWARD);
+      motorBR.run(FORWARD);
+      break;
+    case GO:
+      motorFL.run(FORWARD);
+      motorFR.run(FORWARD);
+      motorBL.run(BACKWARD);
+      motorBR.run(BACKWARD);
+      break;
+    case CW:
+      motorFL.run(BACKWARD);
+      motorFR.run(FORWARD);
+      motorBL.run(FORWARD);
+      motorBR.run(BACKWARD);
+      break;
+    case CCW:
+      motorFL.run(FORWARD);
+      motorFR.run(BACKWARD);
+      motorBL.run(BACKWARD);
+      motorBR.run(FORWARD);
+      break;
+    case STOP:
+    default:
+      motorFL.run(RELEASE);
+      motorFR.run(RELEASE);
+      motorBL.run(RELEASE);
+      motorBR.run(RELEASE);
+      break;
+  }
+}
+
+void forward(int speed)  { move(speed, GO); }
+void backward(int speed) { move(speed, BACK); }
+void ccw(int speed)      { move(speed, CCW); }
+void cw(int speed)       { move(speed, CW); }
+void stop()              { move(0, STOP); }
 
 
 // =============================================================
@@ -184,10 +263,6 @@ static void handleCommand(const TPacket *cmd) {
             stateChanged = false;
             sei();
             {
-                // The data field of a TPacket can carry a short debug string (up to
-                // 31 characters).  pi_sensor.py prints it automatically for any packet
-                // where data is non-empty, so you can use it to send debug messages
-                // from the Arduino to the Pi terminal -- similar to Serial.print().
                 TPacket pkt;
                 memset(&pkt, 0, sizeof(pkt));
                 pkt.packetType = PACKET_TYPE_RESPONSE;
@@ -199,66 +274,59 @@ static void handleCommand(const TPacket *cmd) {
             sendStatus(STATE_STOPPED);
             break;
 
-        // TODO (Activity 2): add COMMAND_COLOR case here.
-        //   Call your color-reading function (which returns Hz), then send a
-        //   response packet with the three channel frequencies in Hz.
         case COMMAND_COLOR_SENSOR: {
-        uint32_t r, g, b;
-        readColorChannels(&r, &g, &b);
+            uint32_t r, g, b;
+            readColorChannels(&r, &g, &b);
 
-        TPacket pkt;
-        memset(&pkt, 0, sizeof(pkt));
-        pkt.packetType = PACKET_TYPE_RESPONSE;
-        pkt.command    = RESP_COLOR_SENSOR;
-        pkt.params[0]  = r;
-        pkt.params[1]  = g;
-        pkt.params[2]  = b;
-        sendFrame(&pkt);
-        break;
+            TPacket pkt;
+            memset(&pkt, 0, sizeof(pkt));
+            pkt.packetType = PACKET_TYPE_RESPONSE;
+            pkt.command    = RESP_COLOR_SENSOR;
+            pkt.params[0]  = r;
+            pkt.params[1]  = g;
+            pkt.params[2]  = b;
+            sendFrame(&pkt);
+            break;
         }
-        case COMMAND_FORWARD{
+
+        case COMMAND_FORWARD:
             forward(motorSpeed);
             sendMotorStatus(motorSpeed);
             break;
-        }
 
-        case COMMAND_BACKWARD{
+        case COMMAND_BACKWARD:
             backward(motorSpeed);
             sendMotorStatus(motorSpeed);
             break;
-        }
-        case COMMAND_LEFT{
+
+        case COMMAND_LEFT:
             ccw(motorSpeed);
             sendMotorStatus(motorSpeed);
             break;
-        }
-        case COMMAND_RIGHT{
+
+        case COMMAND_RIGHT:
             cw(motorSpeed);
             sendMotorStatus(motorSpeed);
             break;
-        }
-        case COMMAND_STOP{
+
+        case COMMAND_STOP:
             stop();
             sendMotorStatus(motorSpeed);
             break;
-        }
-        case COMMAND_SET_SPEED: {
-            uint32_t newSpeed = command->params[0];
 
+        case COMMAND_SET_SPEED: {
+            uint32_t newSpeed = cmd->params[0];
             if (newSpeed > 255) newSpeed = 255;
             motorSpeed = (int)newSpeed;
-
             sendMotorStatus(motorSpeed);
             break;
         }
 
-        default{
+        default:
             sendOk();
             break;
-        }
     }
 }
-
 // =============================================================
 // Arduino setup() and loop()
 // =============================================================

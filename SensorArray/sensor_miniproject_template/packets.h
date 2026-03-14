@@ -9,6 +9,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <AFMotor.h>
 
 // =============================================================
 // TPacket protocol
@@ -19,6 +20,7 @@ typedef enum {
     PACKET_TYPE_RESPONSE = 1,
     PACKET_TYPE_MESSAGE  = 2,
 } TPacketType;
+
 
 typedef enum {
     COMMAND_ESTOP         = 0,
