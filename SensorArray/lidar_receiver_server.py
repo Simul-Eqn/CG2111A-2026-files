@@ -70,11 +70,9 @@ async def handle_client(reader, writer):
         print(f"Error with client {addr}: {e}")
     finally:
         print(f"Closing connection for {addr}")
-        #input("Press any key to close") 
+        plt.close()
         writer.close()
         await writer.wait_closed()
-        plt.waitforbuttonpress()
-        plt.close()
 
 async def main():
     server = await asyncio.start_server(

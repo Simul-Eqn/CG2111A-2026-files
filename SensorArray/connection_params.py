@@ -1,4 +1,4 @@
-server_IP = '100.71.68.106'
+server_IP = '100.109.152.104'
 lidar_port = 12345
 camera_port = 12346
 

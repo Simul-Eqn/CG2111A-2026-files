@@ -21,16 +21,22 @@ typedef enum {
 } TPacketType;
 
 typedef enum {
-    COMMAND_ESTOP = 0,
-    // TODO (Activity 2): add your own command type for the color sensor
-    COMMAND_COLOR_SENSOR = 1,
+    COMMAND_ESTOP         = 0,
+    COMMAND_COLOR_SENSOR  = 1,
+
+    COMMAND_FORWARD       = 2,
+    COMMAND_BACKWARD      = 3,
+    COMMAND_LEFT          = 4,
+    COMMAND_RIGHT         = 5,
+    COMMAND_SET_SPEED     = 6,
+    COMMAND_STOP          = 7
 } TCommandType;
 
 typedef enum {
-    RESP_OK     = 0,
-    RESP_STATUS = 1,
-    // TODO (Activity 2): add your own response type for the color sensor
-    RESP_COLOR_SENSOR = 2,
+    RESP_OK            = 0,
+    RESP_STATUS        = 1,
+    RESP_COLOR_SENSOR  = 2,
+    RESP_MOTOR_STATUS  = 3
 } TResponseType;
 
 typedef enum {

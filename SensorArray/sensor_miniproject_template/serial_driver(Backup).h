@@ -28,7 +28,7 @@
 // TODO (Activity 1, step 2): change this to 1 once txEnqueue(),
 // rxDequeue(), and both ISRs are implemented and working.
 // =============================================================
-#define USE_BAREMETAL_SERIAL 1
+#define USE_BAREMETAL_SERIAL 0
 
 // =============================================================
 // Circular TX / RX buffers (used when USE_BAREMETAL_SERIAL == 1)
@@ -75,50 +75,15 @@ void usartInit(uint16_t ubrr) {
  * interrupt (UDRIE0) and return true.  Must NOT block.
  */
 bool txEnqueue(const uint8_t *data, uint8_t len) {
-  uint8_t localHead, localTail;
-  uint8_t used, freeSpace;
-
-  // Read shared indices once
-  localHead = tx_head;
-  localTail = tx_tail;
-
-  // One slot must always remain empty to distinguish full vs empty
-  used = (localHead - localTail) & TX_BUFFER_MASK;
-  freeSpace = (TX_BUFFER_SIZE - 1) - used;
-
-  if (len > freeSpace) {
+    // TODO
     return false;
-  }
-
-  // Copy all bytes into the TX ring buffer
-  for (uint8_t i = 0; i < len; i++) {
-    tx_buf[localHead] = data[i];
-    localHead = (localHead + 1) & TX_BUFFER_MASK;
-  }
-
-  // Publish new head only after all bytes are copied
-  tx_head = localHead;
-
-  // Enable Data Register Empty interrupt so ISR starts sending
-  UCSR0B |= 0b00100000; //UDRIE0
-  return true;
 }
 
 // TODO (Activity 1): Implement the TX Data Register Empty ISR.
 // Vector: USART0_UDRE_vect
 // Drain one byte from tx_buf into UDR0; when the buffer is empty,
 // clear the UDRIE0 bit to stop the ISR from firing.
-ISR(USART0_UDRE_vect) {
-  if (tx_tail != tx_head) {
-    UDR0 = tx_buf[tx_tail];
-    tx_tail = (tx_tail + 1) & TX_BUFFER_MASK;
-  }
 
-  // If buffer is empty after sending, disable UDRE interrupt
-  if (tx_tail == tx_head) {
-    UCSR0B &= ~(1 << UDRIE0);
-  }
-}
 /*
  * TODO (Activity 1): Implement rxDequeue().
  *
@@ -127,25 +92,8 @@ ISR(USART0_UDRE_vect) {
  * anything and return false.  Must NOT block.
  */
 bool rxDequeue(uint8_t *data, uint8_t len) {
-  uint8_t localHead, localTail;
-  uint8_t available;
-
-  localHead = rx_head;
-  localTail = rx_tail;
-
-  available = (localHead - localTail) & RX_BUFFER_MASK;
-
-  if (len > available) {
+    // TODO
     return false;
-  }
-
-  for (uint8_t i = 0; i < len; i++) {
-    data[i] = rx_buf[localTail];
-    localTail = (localTail + 1) & RX_BUFFER_MASK;
-  }
-
-  rx_tail = localTail;
-  return true;
 }
 
 #endif
@@ -154,18 +102,6 @@ bool rxDequeue(uint8_t *data, uint8_t len) {
 // Vector: USART0_RX_vect
 // Read UDR0 immediately.  If the buffer is not full, store the byte
 // and advance the write index; otherwise discard it.
-ISR(USART0_RX_vect) {
-  uint8_t byte = UDR0;  // must read immediately
-  uint8_t next = (rx_head + 1) & RX_BUFFER_MASK;
-
-  // If full, discard the byte
-  if (next == rx_tail) {
-    return;
-  }
-
-  rx_buf[rx_head] = byte;
-  rx_head = next;
-}
 
 // =============================================================
 // Framing: magic number + XOR checksum (pre-implemented)
