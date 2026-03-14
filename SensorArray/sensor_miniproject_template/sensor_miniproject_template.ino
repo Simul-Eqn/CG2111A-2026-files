@@ -91,38 +91,73 @@ volatile bool   stateChanged = false;
 // Color sensor (TCS3200)
 // =============================================================
 
-/*
- * TODO (Activity 2): Implement the color sensor.
- *
- * Wire the TCS3200 to the Arduino Mega and configure the output pins
- * (S0, S1, S2, S3) and the frequency output pin.
- *
- * Use 20% output frequency scaling (S0=HIGH, S1=LOW).  This is the
- * required standardised setting; it gives a convenient measurement range and
- * ensures all implementations report the same physical quantity.
- *
- * Use a timer to count rising edges on the sensor output over a fixed
- * window (e.g. 100 ms) for each color channel (red, green, blue).
- * Convert the edge count to hertz before sending:
- *   frequency_Hz = edge_count / measurement_window_s
- * For a 100 ms window: frequency_Hz = edge_count * 10.
- *
- * Implement a function that measures all three channels and stores the
- * frequency in Hz in three variables.
- *
- * Define your own command and response types in packets.h (and matching
- * constants in pi_sensor.py), then handle the command in handleCommand()
- * and send back the channel frequencies (in Hz) in a response packet.
- *
- * Example skeleton:
- *
- *   static void readColorChannels(uint32_t *r, uint32_t *g, uint32_t *b) {
- *       // Set S2/S3 for each channel, measure edge count, multiply by 10
- *       *r = measureChannel(0, 0) * 10;  // red,   in Hz
- *       *g = measureChannel(1, 1) * 10;  // green, in Hz
- *       *b = measureChannel(0, 1) * 10;  // blue,  in Hz
- *   }
- */
+// =============================================================
+// Color sensor (TCS3200)
+// =============================================================
+
+// Pin mapping using your current bare-metal ports:
+// PD0 -> sensor OUT
+// PJ0 -> S0
+// PJ1 -> S1
+// PH0 -> S2
+// PH1 -> S3
+
+static void selectRed() {
+    // S2 = LOW, S3 = LOW
+    PORTH &= ~(1 << PH0);
+    PORTH &= ~(1 << PH1);
+}
+
+static void selectBlue() {
+    // S2 = LOW, S3 = HIGH
+    PORTH &= ~(1 << PH0);
+    PORTH |=  (1 << PH1);
+}
+
+static void selectGreen() {
+    // S2 = HIGH, S3 = HIGH
+    PORTH |=  (1 << PH0);
+    PORTH |=  (1 << PH1);
+}
+
+static uint32_t measureChannel100ms() {
+    uint32_t count = 0;
+
+    // OUT is on PD0
+    uint8_t lastState = (PIND & (1 << PIND0));
+
+    uint16_t start = TCNT1;
+
+    // Timer1 prescaler = 64 at 16 MHz
+    // 1 tick = 4 us
+    // 100 ms = 25000 ticks
+    while ((uint16_t)(TCNT1 - start) < 25000) {
+        uint8_t nowState = (PIND & (1 << PIND0));
+
+        // count rising edge
+        if(!lastState && nowState) {
+            count++;
+        }
+
+        lastState = nowState;
+    }
+
+    return count;
+}
+
+static void readColorChannels(uint32_t *r, uint32_t *g, uint32_t *b) {
+    selectRed();
+    _delay_ms(5);
+    *r = measureChannel100ms() * 10;   // Hz
+
+    selectGreen();
+    _delay_ms(5);
+    *g = measureChannel100ms() * 10;   // Hz
+
+    selectBlue();
+    _delay_ms(5);
+    *b = measureChannel100ms() * 10;   // Hz
+}
 
 
 // =============================================================
@@ -167,6 +202,20 @@ static void handleCommand(const TPacket *cmd) {
         // TODO (Activity 2): add COMMAND_COLOR case here.
         //   Call your color-reading function (which returns Hz), then send a
         //   response packet with the three channel frequencies in Hz.
+        case COMMAND_COLOR_SENSOR: {
+        uint32_t r, g, b;
+        readColorChannels(&r, &g, &b);
+
+        TPacket pkt;
+        memset(&pkt, 0, sizeof(pkt));
+        pkt.packetType = PACKET_TYPE_RESPONSE;
+        pkt.command    = RESP_COLOR_SENSOR;
+        pkt.params[0]  = r;
+        pkt.params[1]  = g;
+        pkt.params[2]  = b;
+        sendFrame(&pkt);
+        break;
+}
     }
 }
 
@@ -199,11 +248,20 @@ void setup() {
     // COMMAND_COLOUR_SENSOR RESP_COLOUR
     
     // Color Sensor
-    DDRD &= ~(1 << 0);
-    DDRJ |= (1 << 0) | (1 << 1);
-    DDRH |= (1 << 0) | (1 << 1);
+    // PD0 = OUT from TCS3200 -> input
+    DDRD &= ~(1 << DDD0);
 
-    PORTJ |= (1 << 0);
+    // PJ0 = S0, PJ1 = S1 -> outputs
+    DDRJ |= (1 << DDJ0) | (1 << DDJ1);
+
+    // PH0 = S2, PH1 = S3 -> outputs
+    DDRH |= (1 << DDH0) | (1 << DDH1);
+
+    // 20% output scaling: S0 = HIGH, S1 = LOW
+    PORTJ |=  (1 << PJ0);   // S0 high
+    PORTJ &= ~(1 << PJ1);   // S1 low
+
+
     
   // TODO (Activity 3a): Enable the button to fire an interrupt on any
     // logical change (both rising and falling edges).

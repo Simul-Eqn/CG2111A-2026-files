@@ -265,7 +265,7 @@ def handleColorCommand():
         return
     # TODO
     sendCommand(COMMAND_COLOR_SENSOR)
-    pass
+    
 
 
 # ----------------------------------------------------------------
