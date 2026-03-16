@@ -132,7 +132,10 @@ def run_slam_process(pss: ProcessSharedState) -> None:
         return
 
     # Connect to the LIDAR.
+    pss.set_status("RIGHT BEF CONNECTING"); 
     lidar = lidar_driver.connect()
+    pss.set_status("RIGHT AFT CONNECTING"); 
+    pss.set_status(str(lidar)) 
     if lidar is None:
         from settings import LIDAR_PORT
         pss.set_error(f'Could not connect to LIDAR on {LIDAR_PORT}')

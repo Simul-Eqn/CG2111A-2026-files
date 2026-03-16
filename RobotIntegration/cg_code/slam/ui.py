@@ -138,6 +138,10 @@ class SlamApp(App[None]):
         # Cache the last render key so we skip redraws when nothing changed.
         self._last_render_key: tuple = ()
         self._cached_robot_visible = False
+        # Cache the map bytes to avoid copying 1 MB on every UI tick.
+        # Only copy when map_version changes.
+        self._cached_mapbytes = bytes()
+        self._last_map_version = -1
 
     def compose(self) -> ComposeResult:
         with Vertical(id='root'):
@@ -216,10 +220,16 @@ class SlamApp(App[None]):
 
         bytes(self.pss.shm.buf) makes a one-time copy of the 1 MB map so the
         rendering code can work on a stable snapshot without locking.
+        Only copies when map_version changes to reduce memory pressure.
         """
         error = self.pss.get_error()
+        current_map_version = self.pss.map_version.value
+        # Only copy the map bytes when the version changes.
+        if current_map_version != self._last_map_version:
+            self._cached_mapbytes = bytes(self.pss.shm.buf)
+            self._last_map_version = current_map_version
         return {
-            'mapbytes':      bytes(self.pss.shm.buf),
+            'mapbytes':      self._cached_mapbytes,
             'x_mm':          self.pss.x_mm.value,
             'y_mm':          self.pss.y_mm.value,
             'theta_deg':     self.pss.theta_deg.value,

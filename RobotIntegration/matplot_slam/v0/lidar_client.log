@@ -1,0 +1,14 @@
+[2026-03-23 16:49:59] Connected to LIDAR server at 100.109.145.53:12345
+[2026-03-23 16:51:26] Connected to LIDAR server at 100.109.145.53:12345
+[2026-03-23 16:51:57] STATUS: RIGHT BEF CONNECTING
+[2026-03-23 16:51:57] Connected to LIDAR server at 100.109.145.53:12345
+[2026-03-23 16:53:39] [lidar] Connection error: 0 bytes read on a total of 5 expected bytes
+[2026-03-23 16:53:39] STATUS: RIGHT AFT CONNECTING
+[2026-03-23 16:53:39] STATUS: None
+[2026-03-23 16:53:39] ERROR: Could not connect to LIDAR on /dev/ttyUSB0
+[2026-03-23 16:56:03] STATUS: RIGHT BEF CONNECTING
+[2026-03-23 16:56:03] Connected to LIDAR server at 100.109.145.53:12345
+[2026-03-23 16:56:11] [lidar] Connection error: 0 bytes read on a total of 5 expected bytes
+[2026-03-23 16:56:11] STATUS: RIGHT AFT CONNECTING
+[2026-03-23 16:56:11] STATUS: None
+[2026-03-23 16:56:11] ERROR: Could not connect to LIDAR on /dev/ttyUSB0
