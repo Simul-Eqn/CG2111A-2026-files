@@ -188,7 +188,6 @@ static void handleCommand(const TPacket *cmd) {
             pkt.params[2]  = b;
             sendFrame(&pkt);
             break;
-}
     }
 }
 
