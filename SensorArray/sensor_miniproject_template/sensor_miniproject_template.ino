@@ -102,6 +102,8 @@ volatile bool   stateChanged = false;
 // PH0 -> S2
 // PH1 -> S3
 
+volatile uint32_t edgeCount = 0;
+
 ISR(INT0_vect)
 {
     edgeCount++;
