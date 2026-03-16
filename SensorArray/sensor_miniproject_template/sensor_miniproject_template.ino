@@ -223,17 +223,13 @@ void setup() {
     
     // Color Sensor
     // PD0 = OUT from TCS3200 -> input
-    DDRD &= ~(1 << DDD0);
-
-    // PJ0 = S0, PJ1 = S1 -> outputs
-    DDRJ |= (1 << DDJ0) | (1 << DDJ1);
-
-    // PH0 = S2, PH1 = S3 -> outputs
-    DDRH |= (1 << DDH0) | (1 << DDH1);
+    DDRD &= ~(1 << 3);
+    DDRJ |= (1 << 0) | (1 << 1);
+    DDRH |= (1 << 0) | (1 << 1);
 
     // 20% output scaling: S0 = HIGH, S1 = LOW
-    PORTJ |=  (1 << PJ0);   // S0 high
-    PORTJ &= ~(1 << PJ1);   // S1 low
+    PORTJ |= (1 << 1);   // S0 HIGH
+    PORTJ &= ~(1 << 0);  // S1 LOW
 
 
     
