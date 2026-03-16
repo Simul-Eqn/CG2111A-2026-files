@@ -27,27 +27,7 @@ import time
 from pyrplidar import PyRPlidar
 import camera_handler as CameraHandler
 
-from packets import (
-    PACKET_TYPE_COMMAND,
-    PACKET_TYPE_RESPONSE,
-    COMMAND_ESTOP,
-    COMMAND_COLOR_SENSOR,
-    COMMAND_FORWARD,
-    COMMAND_BACKWARD,
-    COMMAND_LEFT,
-    COMMAND_RIGHT,
-    COMMAND_SET_SPEED,
-    COMMAND_STOP,
-    RESP_STATUS,
-    RESP_COLOR_SENSOR,
-    STATE_RUNNING,
-    STATE_STOPPED,
-    MAGIC,
-    MAX_STR_LEN,
-    PARAMS_COUNT,
-    TPACKET_FMT,
-    TPACKET_SIZE,
-)
+from packets import *
 
 from settings import LIDAR_PORT, LIDAR_BAUD
 

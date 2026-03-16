@@ -207,7 +207,14 @@ def printPacket(pkt):
             r = pkt['params'][0]
             g = pkt['params'][1]
             b = pkt['params'][2]
-            print(f"Color: R={r} Hz, G={g} Hz, B={b} Hz")
+            c = pkt['params'][3]
+            if c == 0:
+                d = 'red'
+            elif c == 1:
+                d = 'green'
+            else:
+                d = 'blue'
+            print(f"Color: R={r} Hz, G={g} Hz, B={b} Hz, Color={d}")
         elif cmd == RESP_MOTOR_STATUS:
             speed = pkt['params'][0]
             print(f"Motor speed: {speed}")

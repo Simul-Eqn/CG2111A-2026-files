@@ -209,6 +209,13 @@ def _handleInput(line: str, client: TCPClient):
 
     tokens = line.split()
     cmd = tokens[0]
+    
+    if line == 'e':
+        frame = _packFrame(PACKET_TYPE_COMMAND, COMMAND_ESTOP,
+                           data=TCPDUMP_DEMO_TEXT)
+        sendTPacketFrame(client.sock, frame)
+        print("[second_terminal] Sent: E-STOP with demo text 'secret information'")
+
 
     if cmd == 'q':
         print("[second_terminal] Quitting.")

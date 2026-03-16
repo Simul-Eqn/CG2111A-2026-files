@@ -31,14 +31,23 @@ typedef enum {
     COMMAND_LEFT          = 4,
     COMMAND_RIGHT         = 5,
     COMMAND_SET_SPEED     = 6,
-    COMMAND_STOP          = 7
+    COMMAND_STOP          = 7,
+
+    // Robot arm commands
+    COMMAND_ARM_BASE      = 20,
+    COMMAND_ARM_SHOULDER  = 21,
+    COMMAND_ARM_ELBOW     = 22,
+    COMMAND_ARM_GRIPPER   = 23,
+    COMMAND_ARM_HOME      = 24,
+    COMMAND_ARM_SET_SPEED = 25
 } TCommandType;
 
 typedef enum {
     RESP_OK            = 0,
     RESP_STATUS        = 1,
     RESP_COLOR_SENSOR  = 2,
-    RESP_MOTOR_STATUS  = 3
+    RESP_MOTOR_STATUS  = 3,
+    RESP_ARM_STATUS    = 4
 } TResponseType;
 
 typedef enum {

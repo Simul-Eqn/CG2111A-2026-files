@@ -21,6 +21,7 @@
 #include "packets.h"
 #include "serial_driver.h"
 #include <AFMotor.h>
+#include <Servo.h>
 #include <util/delay.h>
 typedef enum dir
 {
@@ -47,6 +48,46 @@ AF_DCMotor motorBR(BACK_RIGHT);
 int motorSpeed = 150;
 //uint16_t lastDebounceTime = 0; //debounce variable
 bool currentStatus = true;     //helper variable for INT5 ISR
+
+// =============================================================
+// Robot arm (Timer-safe integration)
+// Uses Arduino Servo library to avoid direct register/timer clashes
+// with existing Timer2 debounce/color timing and other modules.
+// On Mega, use analog pins A9-A12 for servo signal wires.
+// =============================================================
+
+#define ARM_BASE_PIN      A9
+#define ARM_SHOULDER_PIN  A10
+#define ARM_ELBOW_PIN     A11
+#define ARM_GRIPPER_PIN   A12
+
+#define ARM_BASE_MIN      0
+#define ARM_BASE_MAX      180
+#define ARM_SHOULDER_MIN  70
+#define ARM_SHOULDER_MAX  120
+#define ARM_ELBOW_MIN     60
+#define ARM_ELBOW_MAX     120
+#define ARM_GRIPPER_MIN   70
+#define ARM_GRIPPER_MAX   100
+#define ARM_SPEED_MIN     1
+#define ARM_SPEED_MAX     50
+
+typedef enum {
+  ARM_JOINT_BASE = 0,
+  ARM_JOINT_SHOULDER = 1,
+  ARM_JOINT_ELBOW = 2,
+  ARM_JOINT_GRIPPER = 3,
+  ARM_JOINT_COUNT = 4
+} ArmJoint;
+
+static Servo armServos[ARM_JOINT_COUNT];
+static const uint8_t armPins[ARM_JOINT_COUNT] = {
+  ARM_BASE_PIN, ARM_SHOULDER_PIN, ARM_ELBOW_PIN, ARM_GRIPPER_PIN
+};
+static uint8_t armPos[ARM_JOINT_COUNT] = {90, 90, 90, 90};
+static uint8_t armTarget[ARM_JOINT_COUNT] = {90, 90, 90, 90};
+static uint8_t armMsPerDeg = 10;
+static uint32_t armLastUpdate[ARM_JOINT_COUNT] = {0, 0, 0, 0};
 // =============================================================
 // Packet helpers (pre-implemented for you)
 // =============================================================
@@ -76,6 +117,112 @@ static void sendOk() {
 
 static void sendMotorStatus(uint32_t speed) {
     sendResponse(RESP_MOTOR_STATUS, speed);
+}
+
+static void sendArmStatus() {
+    TPacket pkt;
+    memset(&pkt, 0, sizeof(pkt));
+    pkt.packetType = PACKET_TYPE_RESPONSE;
+    pkt.command = RESP_ARM_STATUS;
+    pkt.params[0] = armTarget[ARM_JOINT_BASE];
+    pkt.params[1] = armTarget[ARM_JOINT_SHOULDER];
+    pkt.params[2] = armTarget[ARM_JOINT_ELBOW];
+    pkt.params[3] = armTarget[ARM_JOINT_GRIPPER];
+    pkt.params[4] = armMsPerDeg;
+    sendFrame(&pkt);
+}
+
+static void sendOkWithMsg(const char *msg) {
+    TPacket pkt;
+    memset(&pkt, 0, sizeof(pkt));
+    pkt.packetType = PACKET_TYPE_RESPONSE;
+    pkt.command = RESP_OK;
+    if (msg != NULL) {
+      strncpy(pkt.data, msg, sizeof(pkt.data) - 1);
+      pkt.data[sizeof(pkt.data) - 1] = '\0';
+    }
+    sendFrame(&pkt);
+}
+
+static void armInit() {
+  for (uint8_t i = 0; i < ARM_JOINT_COUNT; i++) {
+    armServos[i].attach(armPins[i]);
+    armServos[i].write(armPos[i]);
+  }
+}
+
+static bool armApplyTarget(uint8_t joint, uint32_t value, uint8_t minV, uint8_t maxV) {
+  if (value < minV || value > maxV) {
+    sendOkWithMsg("ERR_RANGE");
+    return false;
+  }
+  armTarget[joint] = (uint8_t)value;
+  return true;
+}
+
+static void armHome() {
+  armTarget[ARM_JOINT_BASE] = 90;
+  armTarget[ARM_JOINT_SHOULDER] = 90;
+  armTarget[ARM_JOINT_ELBOW] = 90;
+  armTarget[ARM_JOINT_GRIPPER] = 90;
+}
+
+static void armUpdateMotion() {
+  uint32_t now = millis();
+  for (uint8_t i = 0; i < ARM_JOINT_COUNT; i++) {
+    if (armPos[i] == armTarget[i]) continue;
+    if ((now - armLastUpdate[i]) < armMsPerDeg) continue;
+    armLastUpdate[i] = now;
+    if (armPos[i] < armTarget[i]) armPos[i]++;
+    else armPos[i]--;
+    armServos[i].write(armPos[i]);
+  }
+}
+
+static void handleArmCommand(const TPacket *cmd) {
+  const uint32_t value = cmd->params[0];
+  switch (cmd->command) {
+    case COMMAND_ARM_BASE:
+      if (armApplyTarget(ARM_JOINT_BASE, value, ARM_BASE_MIN, ARM_BASE_MAX)) {
+        sendOkWithMsg("BASE_OK");
+        sendArmStatus();
+      }
+      break;
+    case COMMAND_ARM_SHOULDER:
+      if (armApplyTarget(ARM_JOINT_SHOULDER, value, ARM_SHOULDER_MIN, ARM_SHOULDER_MAX)) {
+        sendOkWithMsg("SHLDR_OK");
+        sendArmStatus();
+      }
+      break;
+    case COMMAND_ARM_ELBOW:
+      if (armApplyTarget(ARM_JOINT_ELBOW, value, ARM_ELBOW_MIN, ARM_ELBOW_MAX)) {
+        sendOkWithMsg("ELBOW_OK");
+        sendArmStatus();
+      }
+      break;
+    case COMMAND_ARM_GRIPPER:
+      if (armApplyTarget(ARM_JOINT_GRIPPER, value, ARM_GRIPPER_MIN, ARM_GRIPPER_MAX)) {
+        sendOkWithMsg("GRIP_OK");
+        sendArmStatus();
+      }
+      break;
+    case COMMAND_ARM_HOME:
+      armHome();
+      sendOkWithMsg("HOME_OK");
+      sendArmStatus();
+      break;
+    case COMMAND_ARM_SET_SPEED:
+      if (value < ARM_SPEED_MIN || value > ARM_SPEED_MAX) {
+        sendOkWithMsg("ERR_SPEED");
+      } else {
+        armMsPerDeg = (uint8_t)value;
+        sendOkWithMsg("SPEED_OK");
+        sendArmStatus();
+      }
+      break;
+    default:
+      break;
+  }
 }
 // =============================================================
 // E-Stop state machine
@@ -343,6 +490,15 @@ static void handleCommand(const TPacket *cmd) {
             break;
         }
 
+        case COMMAND_ARM_BASE:
+        case COMMAND_ARM_SHOULDER:
+        case COMMAND_ARM_ELBOW:
+        case COMMAND_ARM_GRIPPER:
+        case COMMAND_ARM_HOME:
+        case COMMAND_ARM_SET_SPEED:
+            handleArmCommand(cmd);
+            break;
+
         default:
             sendOk();
             break;
@@ -391,6 +547,9 @@ void setup() {
     
     // Color Sensor
     INIT_COLOR_SENSOR();
+    armInit();
+    sendOkWithMsg("ARM_READY");
+    sendArmStatus();
 
 
     
@@ -407,6 +566,8 @@ ISR(TIMER2_COMPA_vect) { // this'll automatically reset timer2
 }
 
 void loop() {
+    armUpdateMotion();
+
     // --- 1. Report any E-Stop state change to the Pi ---
     if (stateChanged) {
         cli();
