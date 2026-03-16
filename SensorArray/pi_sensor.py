@@ -24,6 +24,7 @@ import select
 
 import camera_handler as CameraHandler  
 import lidar_scanner as LidarScanner
+from second_terminal import relay
 
 
 # ----------------------------------------------------------------
@@ -59,47 +60,8 @@ def closeSerial():
 # TPACKET CONSTANTS
 # (must match sensor_miniproject_template.ino)
 # ----------------------------------------------------------------
+from packets import *
 
-PACKET_TYPE_COMMAND  = 0
-PACKET_TYPE_RESPONSE = 1
-PACKET_TYPE_MESSAGE  = 2
-
-COMMAND_ESTOP  = 0
-# TODO (Activity 2): define your own command type for the color sensor here.
-# It must match the value you add to TCommandType in packets.h.
-COMMAND_COLOR_SENSOR = 1
-COMMAND_FORWARD = 2
-COMMAND_BACKWARD = 3
-COMMAND_LEFT = 4
-COMMAND_RIGHT = 5
-COMMAND_SET_SPEED = 6
-COMMAND_STOP = 7
-
-RESP_OK     = 0
-RESP_STATUS = 1
-# TODO (Activity 2): define your own response type for the color sensor here.
-# It must match the value you add to TResponseType in packets.h.
-RESP_COLOR_SENSOR = 2
-RESP_MOTOR_STATUS = 3
-
-STATE_RUNNING = 0
-STATE_STOPPED = 1
-
-MAX_STR_LEN  = 32
-PARAMS_COUNT = 16
-
-TPACKET_SIZE = 1 + 1 + 2 + MAX_STR_LEN + (PARAMS_COUNT * 4)  # = 100
-TPACKET_FMT  = f'<BB2x{MAX_STR_LEN}s{PARAMS_COUNT}I'
-
-
-# motor speed initialize
-motor_speed = 150
-# ----------------------------------------------------------------
-# RELIABLE FRAMING: magic number + XOR checksum
-# ----------------------------------------------------------------
-
-MAGIC = b'\xDE\xAD'          # 2-byte magic number (0xDEAD)
-FRAME_SIZE = len(MAGIC) + TPACKET_SIZE + 1   # 2 + 100 + 1 = 103
 
 
 def computeChecksum(data: bytes) -> int:
@@ -420,6 +382,8 @@ def runCommandInterface():
             pkt = receiveFrame()
             if pkt:
                 printPacket(pkt)
+                relay.onPacketReceived(packFrame(pkt['packetType'], pkt['command'],
+pkt['data'], pkt['params']))
 
         rlist, _, _ = select.select([sys.stdin], [], [], 0)
         if rlist:
@@ -428,7 +392,7 @@ def runCommandInterface():
                 time.sleep(0.05)
                 continue
             handleUserInput(line)
-
+        relay.checkSecondTerminal(_ser)
         time.sleep(0.05)
 
 
@@ -438,6 +402,7 @@ def runCommandInterface():
 
 if __name__ == '__main__':
     openSerial()
+    relay.start()
     LidarScanner.lidar_connect()
     #_camera = alex_camera.cameraOpen()
     CameraHandler.camera_connect() 
@@ -446,6 +411,7 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         print("\nExiting.")
     finally:
+        relay.shutdown()
         LidarScanner.lidar_disconnect()
         CameraHandler.camera_close()
         closeSerial()
