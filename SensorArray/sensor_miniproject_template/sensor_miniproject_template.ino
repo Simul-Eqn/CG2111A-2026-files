@@ -102,61 +102,34 @@ volatile bool   stateChanged = false;
 // PH0 -> S2
 // PH1 -> S3
 
-static void selectRed() {
-    // S2 = LOW, S3 = LOW
-    PORTH &= ~(1 << PH0);
-    PORTH &= ~(1 << PH1);
+ISR(INT0_vect)
+{
+    edgeCount++;
 }
 
-static void selectBlue() {
-    // S2 = LOW, S3 = HIGH
-    PORTH &= ~(1 << PH0);
-    PORTH |=  (1 << PH1);
-}
+uint32_t measureChannel(uint8_t s2, uint8_t s3)
+{
+    if (s2)
+        PORTH |= (1 << 1);
+    else
+        PORTH &= ~(1 << 1);
 
-static void selectGreen() {
-    // S2 = HIGH, S3 = HIGH
-    PORTH |=  (1 << PH0);
-    PORTH |=  (1 << PH1);
-}
+    if (s3)
+        PORTH |= (1 << 0);
+    else
+        PORTH &= ~(1 << 0);
 
-static uint32_t measureChannel100ms() {
-    uint32_t count = 0;
+    edgeCount = 0;
 
-    // OUT is on PD0
-    uint8_t lastState = (PIND & (1 << PIND0));
+    _delay_ms(100);   // 100 ms measurement window
 
-    uint16_t start = TCNT1;
-
-    // Timer1 prescaler = 64 at 16 MHz
-    // 1 tick = 4 us
-    // 100 ms = 25000 ticks
-    while ((uint16_t)(TCNT1 - start) < 25000) {
-        uint8_t nowState = (PIND & (1 << PIND0));
-
-        // count rising edge
-        if(!lastState && nowState) {
-            count++;
-        }
-
-        lastState = nowState;
-    }
-
-    return count;
+    return edgeCount;
 }
 
 static void readColorChannels(uint32_t *r, uint32_t *g, uint32_t *b) {
-    selectRed();
-    _delay_ms(5);
-    *r = measureChannel100ms() * 10;   // Hz
-
-    selectGreen();
-    _delay_ms(5);
-    *g = measureChannel100ms() * 10;   // Hz
-
-    selectBlue();
-    _delay_ms(5);
-    *b = measureChannel100ms() * 10;   // Hz
+  *r = measureChannel(0, 0) * 10;  // red,   in Hz
+  *g = measureChannel(1, 1) * 10;  // green, in Hz
+  *b = measureChannel(0, 1) * 10;  // blue,  in Hz
 }
 
 
@@ -235,8 +208,9 @@ void setup() {
     // TODO (Activity 1): configure the button pin and its external interrupt,
     // then call sei() to enable global interrupts.
     cli();
+    EICRA = 0b00000011; // for the color sensor rising edge
     EICRB = 0b00000100;
-    EIMSK = 0b00100000;
+    EIMSK = 0b00100001;
     TCCR1A = 0;          // normal mode
     TCCR1B = 0;
     TCNT1 = 0;           // reset counter
