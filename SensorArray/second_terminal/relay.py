@@ -104,6 +104,24 @@ def checkSecondTerminal(serial_port):
         _st_conn = None
 
 
+def recvFromSecondTerminal():
+    """Return one raw frame from second terminal when available, else None.
+
+    Non-blocking behavior is preserved by checking socket readiness first.
+    """
+    global _st_conn
+
+    if not (_st_conn and _st_server and _st_server.hasData()):
+        return None
+
+    frame = recvTPacketFrame(_st_conn)
+    if frame is None:
+        print("[relay] Second terminal disconnected.")
+        _st_conn = None
+        return None
+    return frame
+
+
 # ============================================================
 # Lifecycle
 # ============================================================

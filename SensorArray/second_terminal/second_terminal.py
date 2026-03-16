@@ -157,6 +157,9 @@ def _printPacket(pkt):
             state         = pkt['params'][0]
             _estop_active = (state == STATE_STOPPED)
             print(f"[robot] Status: {'STOPPED' if _estop_active else 'RUNNING'}")
+        elif cmd == RESP_ARM_STATUS:
+            b, s, e, g, v = pkt['params'][0:5]
+            print(f"[robot] Arm status: B={b} S={s} E={e} G={g} V={v}")
         else:
             print(f"[robot] Response: unknown command {cmd}")
         # Print any debug string embedded in the data field.
@@ -176,24 +179,91 @@ def _printPacket(pkt):
 # Input handling
 # ---------------------------------------------------------------------------
 
+def _arm_range_for(cmd: str):
+    if cmd == 'b':
+        return ARM_BASE_MIN, ARM_BASE_MAX, COMMAND_ARM_BASE, "BASE"
+    if cmd == 's':
+        return ARM_SHOULDER_MIN, ARM_SHOULDER_MAX, COMMAND_ARM_SHOULDER, "SHOULDER"
+    if cmd == 'e':
+        return ARM_ELBOW_MIN, ARM_ELBOW_MAX, COMMAND_ARM_ELBOW, "ELBOW"
+    if cmd == 'g':
+        return ARM_GRIPPER_MIN, ARM_GRIPPER_MAX, COMMAND_ARM_GRIPPER, "GRIPPER"
+    return None
+
+
+def _send_arm_command(client: TCPClient, command: int, value: int, label: str):
+    params = [0] * PARAMS_COUNT
+    params[0] = value
+    frame = _packFrame(PACKET_TYPE_COMMAND, command, params=params)
+    if sendTPacketFrame(client.sock, frame):
+        print(f"[second_terminal] Sent {label}={value}")
+    else:
+        print("[second_terminal] Failed to send arm command")
+
+
 def _handleInput(line: str, client: TCPClient):
     """Handle one line of keyboard input."""
     line = line.strip().lower()
     if not line:
         return
 
-    if line == 'e':
-        frame = _packFrame(PACKET_TYPE_COMMAND, COMMAND_ESTOP,
-                           data=TCPDUMP_DEMO_TEXT)
-        sendTPacketFrame(client.sock, frame)
-        print("[second_terminal] Sent: E-STOP with demo text 'secret information'")
+    tokens = line.split()
+    cmd = tokens[0]
 
-    elif line == 'q':
+    if cmd == 'q':
         print("[second_terminal] Quitting.")
         raise KeyboardInterrupt
 
-    else:
-        print(f"[second_terminal] Unknown: '{line}'.  Valid: e (E-Stop)  q (quit)")
+    if cmd == 'h':
+        frame = _packFrame(PACKET_TYPE_COMMAND, COMMAND_ARM_HOME)
+        if sendTPacketFrame(client.sock, frame):
+            print("[second_terminal] Sent ARM_HOME")
+        else:
+            print("[second_terminal] Failed to send ARM_HOME")
+        return
+
+    if cmd == 'v':
+        if len(tokens) != 2:
+            print(f"[second_terminal] Usage: v <{ARM_SPEED_MIN}-{ARM_SPEED_MAX}>")
+            return
+        try:
+            speed = int(tokens[1])
+        except ValueError:
+            print("[second_terminal] Speed must be an integer")
+            return
+        if speed < ARM_SPEED_MIN or speed > ARM_SPEED_MAX:
+            print(f"[second_terminal] Speed out of range: {ARM_SPEED_MIN}-{ARM_SPEED_MAX}")
+            return
+        _send_arm_command(client, COMMAND_ARM_SET_SPEED, speed, "SPEED")
+        return
+
+    arm = _arm_range_for(cmd)
+    if arm:
+        if len(tokens) != 2:
+            lo, hi, _, _ = arm
+            print(f"[second_terminal] Usage: {cmd} <{lo}-{hi}>")
+            return
+        try:
+            angle = int(tokens[1])
+        except ValueError:
+            print("[second_terminal] Angle must be an integer")
+            return
+        lo, hi, pkt_cmd, label = arm
+        if angle < lo or angle > hi:
+            print(f"[second_terminal] {label} out of range: {lo}-{hi}")
+            return
+        _send_arm_command(client, pkt_cmd, angle, label)
+        return
+
+    if cmd == 'x':
+        frame = _packFrame(PACKET_TYPE_COMMAND, COMMAND_STOP)
+        if sendTPacketFrame(client.sock, frame):
+            print("[second_terminal] Sent STOP")
+        else:
+            print("[second_terminal] Failed to send STOP")
+        return
+
+    print("[second_terminal] Unknown command. Valid: b/s/e/g <angle>, h, v <speed>, x, q")
 
 
 # ---------------------------------------------------------------------------
@@ -246,7 +316,15 @@ def run():
         sys.exit(1)
 
     print("[second_terminal] Connected!")
-    print("[second_terminal] Commands:  e = E-Stop   q = quit")
+    print("[second_terminal] Commands:")
+    print("  b <angle>  base")
+    print("  s <angle>  shoulder")
+    print("  e <angle>  elbow")
+    print("  g <angle>  gripper")
+    print("  h          home")
+    print("  v <speed>  speed")
+    print("  x          stop")
+    print("  q          quit")
     print("[second_terminal] Incoming robot packets will be printed below.\n")
 
     rx_thread = threading.Thread(target=_receiver_loop, args=(client,), daemon=True)

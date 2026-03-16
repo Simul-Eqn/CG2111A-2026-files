@@ -211,6 +211,13 @@ def printPacket(pkt):
         elif cmd == RESP_MOTOR_STATUS:
             speed = pkt['params'][0]
             print(f"Motor speed: {speed}")
+        elif cmd == RESP_ARM_STATUS:
+            base = pkt['params'][0]
+            shoulder = pkt['params'][1]
+            elbow = pkt['params'][2]
+            gripper = pkt['params'][3]
+            speed = pkt['params'][4]
+            print(f"Arm status: B={base} S={shoulder} E={elbow} G={gripper} V={speed}")
         else:
             print(f"Response: unknown command {cmd}")
         # Print the optional debug string from the data field.
@@ -392,7 +399,21 @@ pkt['data'], pkt['params']))
                 time.sleep(0.05)
                 continue
             handleUserInput(line)
-        relay.checkSecondTerminal(_ser)
+
+        frame = relay.recvFromSecondTerminal()
+        if frame is not None:
+            if len(frame) != FRAME_SIZE or frame[:2] != MAGIC:
+                print("[relay] Dropped invalid frame from second terminal")
+            else:
+                raw = frame[2:2 + TPACKET_SIZE]
+                if frame[-1] != computeChecksum(raw):
+                    print("[relay] Dropped bad-checksum frame from second terminal")
+                else:
+                    pkt = unpackTPacket(raw)
+                    if pkt['packetType'] == PACKET_TYPE_COMMAND:
+                        _ser.write(frame)
+                    else:
+                        print("[relay] Dropped non-command packet from second terminal")
         time.sleep(0.05)
 
 
