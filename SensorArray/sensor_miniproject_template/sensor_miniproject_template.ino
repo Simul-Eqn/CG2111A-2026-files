@@ -35,7 +35,7 @@ typedef enum dir
 #define FRONT_LEFT   4
 #define FRONT_RIGHT  1
 #define BACK_LEFT    3
-#define BACK_RIGHT   2
+#define BACK_RIGHT   2  
 
 volatile uint16_t debounce_ms = 0; 
 volatile uint16_t color_ms = 0; 
@@ -44,6 +44,16 @@ AF_DCMotor motorFL(FRONT_LEFT);
 AF_DCMotor motorFR(FRONT_RIGHT);
 AF_DCMotor motorBL(BACK_LEFT);
 AF_DCMotor motorBR(BACK_RIGHT);
+
+struct ColorRef {
+  float R;
+  float G;
+  float B;
+};
+
+ColorRef RED_REF   = {5028/6000.0, 1702/5000.0, 8192/13000.0};
+ColorRef GREEN_REF = {3312/6000.0, 3918/5000.0, 9656/13000.0};
+ColorRef BLUE_REF  = {2714/6000.0, 4142/5000.0, 12100/13000.0};
 
 int motorSpeed = 150;
 //uint16_t lastDebounceTime = 0; //debounce variable
@@ -339,7 +349,14 @@ static uint32_t measureChannel100ms() {
     return count;
 }
 
-static void readColorChannels(uint32_t *r, uint32_t *g, uint32_t *b) {
+float colorDistance(float r1, float g1, float b1, ColorRef ref) {
+  float dr = r1 - ref.R;
+  float dg = g1 - ref.G;
+  float db = b1 - ref.B;
+  return dr * dr + dg * dg + db * db; // no sqrt needed
+}
+
+static void readColorChannels(uint32_t *r, uint32_t *g, uint32_t *b, uint32_t *c) {
     selectRed();
     _delay_ms(5);
     *r = measureChannel100ms() * 10;   // Hz
@@ -351,6 +368,22 @@ static void readColorChannels(uint32_t *r, uint32_t *g, uint32_t *b) {
     selectBlue();
     _delay_ms(5);
     *b = measureChannel100ms() * 10;   // Hz
+
+    float rN = *r / 6000.0;
+    float gN = *g / 5000.0;
+    float bN = *b / 13000.0;
+
+    float dRed   = colorDistance(rN, gN, bN, RED_REF);
+    float dGreen = colorDistance(rN, gN, bN, GREEN_REF);
+    float dBlue  = colorDistance(rN, gN, bN, BLUE_REF);
+
+    if (dRed < dGreen && dRed < dBlue) {
+        *c = 0;
+    } else if (dGreen < dRed && dGreen < dBlue) {
+        *c = 1;
+    } else {
+        *c = 2;
+    }
 }
 // =============================================================
 // motor
@@ -443,8 +476,8 @@ static void handleCommand(const TPacket *cmd) {
             break;
 
         case COMMAND_COLOR_SENSOR: {
-            uint32_t r, g, b;
-            readColorChannels(&r, &g, &b);
+            uint32_t r, g, b, c;
+            readColorChannels(&r, &g, &b, &c);
 
             TPacket pkt;
             memset(&pkt, 0, sizeof(pkt));
@@ -453,6 +486,7 @@ static void handleCommand(const TPacket *cmd) {
             pkt.params[0]  = r;
             pkt.params[1]  = g;
             pkt.params[2]  = b;
+            pkt.params[3]  = c;
             sendFrame(&pkt);
             break;
         }
