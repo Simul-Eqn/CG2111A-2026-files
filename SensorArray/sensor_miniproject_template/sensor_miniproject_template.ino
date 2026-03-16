@@ -202,19 +202,19 @@ static void handleCommand(const TPacket *cmd) {
         // TODO (Activity 2): add COMMAND_COLOR case here.
         //   Call your color-reading function (which returns Hz), then send a
         //   response packet with the three channel frequencies in Hz.
-        case COMMAND_COLOR_SENSOR: {
-        uint32_t r, g, b;
-        readColorChannels(&r, &g, &b);
-
-        TPacket pkt;
-        memset(&pkt, 0, sizeof(pkt));
-        pkt.packetType = PACKET_TYPE_RESPONSE;
-        pkt.command    = RESP_COLOR_SENSOR;
-        pkt.params[0]  = r;
-        pkt.params[1]  = g;
-        pkt.params[2]  = b;
-        sendFrame(&pkt);
-        break;
+        case COMMAND_COLOR_SENSOR:
+            uint32_t r, g, b;
+            readColorChannels(&r, &g, &b);
+    
+            TPacket pkt;
+            memset(&pkt, 0, sizeof(pkt));
+            pkt.packetType = PACKET_TYPE_RESPONSE;
+            pkt.command    = RESP_COLOR_SENSOR;
+            pkt.params[0]  = r;
+            pkt.params[1]  = g;
+            pkt.params[2]  = b;
+            sendFrame(&pkt);
+            break;
 }
     }
 }
