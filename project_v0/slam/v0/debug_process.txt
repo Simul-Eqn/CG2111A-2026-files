@@ -1,0 +1,15 @@
+it receives the connect command but is continuousy wiating t oget port and baud rate for some reason 
+
+
+            elif command == net_params.CMD_CONNECT:
+                print("CONNECT COMMAND")
+                port_data = await reader.readexactly(4)
+                port = struct.unpack('i', port_data)[0]
+                print("GOT PIORT")
+                baud_data = await reader.readexactly(4)
+                baudrate = struct.unpack('i', baud_data)[0]
+                print("GOT BAUDRATE")
+                
+                print("CONNECTING")
+                lidar = connect(port=port, baudrate=baudrate)
+                if lidar is not None:

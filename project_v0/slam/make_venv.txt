@@ -1,0 +1,7 @@
+On windows: 
+```python -m venv env``` 
+
+```.\env\Scripts\activate.bat```
+
+```pip install "git+https://github.com/simondlevy/BreezySLAM.git#subdirectory=python" textual```
+

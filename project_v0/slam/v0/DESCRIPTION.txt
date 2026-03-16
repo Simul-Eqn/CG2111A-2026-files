@@ -1,0 +1,5 @@
+I just patch lidar.py to work and all this is now run locally on our computer 
+
+All are on computer, except settings.py and mpsv0_connection_params.py (raspberry pi needs a copy), and rp_lidar_api.py (run on raspberrypi) 
+
+Connection parameters set at mpsv0_connection_params.py 
