@@ -36,13 +36,15 @@ typedef enum dir
 #define BACK_LEFT    3
 #define BACK_RIGHT   2
 
+volatile uint16_t timer2_ticks = 0; 
+
 AF_DCMotor motorFL(FRONT_LEFT);
 AF_DCMotor motorFR(FRONT_RIGHT);
 AF_DCMotor motorBL(BACK_LEFT);
 AF_DCMotor motorBR(BACK_RIGHT);
 
 int motorSpeed = 150;
-uint16_t lastDebounceTime = 0; //debounce variable
+//uint16_t lastDebounceTime = 0; //debounce variable
 bool currentStatus = true;     //helper variable for INT5 ISR
 // =============================================================
 // Packet helpers (pre-implemented for you)
@@ -93,11 +95,11 @@ volatile bool   stateChanged = false;
  * in setup() -- check the ATMega2560 datasheet for the correct
  * registers for your chosen pin.
  */
- ISR(INT5_vect) {
-    uint16_t timeCurrent = TCNT1;
+ ISR(INT5_vect) { // this resets timer 2 ticks 
 
-    if(timeCurrent - lastDebounceTime > 250) {
-      lastDebounceTime = timeCurrent;
+    if(timer2_ticks > 2) { // 2 ms 
+      timer2_ticks = 0; 
+
       int state = (PINE & (1 << 5));
 
       if(state && buttonState == STATE_RUNNING && currentStatus == true) {
@@ -130,6 +132,23 @@ volatile bool   stateChanged = false;
 // PH0 -> S2
 // PH1 -> S3
 
+static void INIT_COLOR_SENSOR() {
+    // PK0 = OUT from TCS3200 -> input
+    DDRK &= ~(1 << DDK0);
+
+    // PJ0 = S0, PJ1 = S1 -> outputs
+    DDRJ |= (1 << DDJ0) | (1 << DDJ1);
+
+    // PH0 = S2, PH1 = S3 -> outputs
+    DDRH |= (1 << DDH0) | (1 << DDH1);
+
+    // 20% output scaling: S0 = HIGH, S1 = LOW
+    PORTJ |=  (1 << PJ1);   // S0 high
+    PORTJ &= ~(1 << PJ0);   // S1 low
+
+    // init timer 2 
+}
+
 static void selectRed() {
     // S2 = LOW, S3 = LOW
     PORTH &= ~(1 << PH0);
@@ -154,12 +173,12 @@ static uint32_t measureChannel100ms() {
     // OUT is on PD0
     uint8_t lastState = (PINK & (1 << PINK0));
 
-    uint16_t start = TCNT1;
+    // can set timer2_ticks to a value>250 like 300 to avoid integer overflow 
+    if (timer2_ticks > 300) timer2_ticks = 300; 
+    uint16_t start = timer2_ticks;
 
-    // Timer1 prescaler = 64 at 16 MHz
-    // 1 tick = 4 us
-    // 100 ms = 25000 ticks
-    while ((uint16_t)(TCNT1 - start) < 25000) {
+    // 100 ms 
+    while ((uint16_t)(timer2_ticks - start) < 100) {
         uint8_t nowState = (PINK & (1 << PINK0));
 
         // count rising edge
@@ -343,37 +362,43 @@ void setup() {
     // TODO (Activity 1): configure the button pin and its external interrupt,
     // then call sei() to enable global interrupts.
     cli();
+
+    
     EICRB = 0b00000100;
     EIMSK = 0b00100000;
-    TCCR1A = 0;          // normal mode
-    TCCR1B = 0;
-    TCNT1 = 0;           // reset counter
-    TCCR1B |= (1 << CS11) | (1 << CS10);   // prescaler = 64
     DDRE &= ~(1 << 5);
+
+
+    // init timer 2 counter used for all 
+    // CTC WGM: 010, only WGM21 is set 
+    TCCR2A = (1 << WGM21); 
+    // prescaler 128, TOP 125, gives 1ms per tick 
+    // prescaler 128 is 101 
+    OCRA = 125; 
+    // enable interrupt timer2A 
+    TIMSK2 = 0b10; 
+
+
+    
 
     // TO DO
     // SET PD0 AS AN INTERRUPT WITH RISING EDGE
     // COMMAND_COLOUR_SENSOR RESP_COLOUR
     
     // Color Sensor
-    // PK0 = OUT from TCS3200 -> input
-    DDRK &= ~(1 << DDK0);
-
-    // PJ0 = S0, PJ1 = S1 -> outputs
-    DDRJ |= (1 << DDJ0) | (1 << DDJ1);
-
-    // PH0 = S2, PH1 = S3 -> outputs
-    DDRH |= (1 << DDH0) | (1 << DDH1);
-
-    // 20% output scaling: S0 = HIGH, S1 = LOW
-    PORTJ |=  (1 << PJ1);   // S0 high
-    PORTJ &= ~(1 << PJ0);   // S1 low
+    INIT_COLOR_SENSOR()
 
 
     
   // TODO (Activity 3a): Enable the button to fire an interrupt on any
     // logical change (both rising and falling edges).
     sei();
+
+    TCCR2B = 0b101; // start timer 2 ticking 
+}
+
+ISR(TIMER2_COMPA_vect) { // this'll automatically reset timer2 
+    timer2_ticks ++; 
 }
 
 void loop() {
