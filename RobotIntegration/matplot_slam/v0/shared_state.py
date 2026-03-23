@@ -18,6 +18,7 @@ import multiprocessing
 import multiprocessing.shared_memory
 
 from settings import MAP_SIZE_PIXELS, UNKNOWN_BYTE
+from log_to_file import _client_log 
 
 
 class ProcessSharedState:
@@ -81,6 +82,7 @@ class ProcessSharedState:
     def set_status(self, msg: str):
         """Write a status string (truncated to 127 bytes)."""
         self.status_note.value = msg.encode('utf-8')[:127]
+        _client_log("STATUS: "+msg)
 
     def get_status(self) -> str:
         """Read the current status string."""
@@ -89,6 +91,7 @@ class ProcessSharedState:
     def set_error(self, msg: str):
         """Write an error string (truncated to 255 bytes)."""
         self.error_message.value = msg.encode('utf-8')[:255]
+        _client_log("ERROR: "+msg)
 
     def get_error(self) -> str:
         """Read the current error string (empty string if no error)."""

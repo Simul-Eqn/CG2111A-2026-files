@@ -97,7 +97,7 @@ INITIAL_ROUNDS_SKIP = 5
 
 # How many times per second the terminal map refreshes.
 # Lower values reduce CPU load; higher values give a smoother display.
-UI_REFRESH_HZ = 2
+UI_REFRESH_HZ = 4
 
 # Maximum width and height of the rendered map in terminal cells.
 # Reduce these if the display is too slow on your terminal emulator.
@@ -105,8 +105,8 @@ MAX_RENDER_COLS = 120
 MAX_RENDER_ROWS = 45
 
 # How often the map is copied from the SLAM process (times per second).
-# Copying 1 MB of map data is relatively expensive; keep this low.
-MAP_UPDATE_HZ = 1.0
+# Copying 1 MB of map data is relatively expensive; now mitigated by caching.
+MAP_UPDATE_HZ = 2.0
 MAP_UPDATE_INTERVAL = 1.0 / MAP_UPDATE_HZ
 
 # Default zoom level index into ZOOM_HALF_M (0 = full map).

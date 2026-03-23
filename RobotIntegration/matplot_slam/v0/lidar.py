@@ -16,6 +16,7 @@ import mpsv0_connection_params as net_params
 import struct
 import asyncio
 import threading
+
 from typing import Optional, Tuple, List, Generator
 from settings import LIDAR_PORT, LIDAR_BAUD
 
@@ -27,6 +28,7 @@ _loop = None
 _loop_thread = None
 _lock = threading.Lock()
 
+from log_to_file import _client_log 
 
 def _run_in_background_loop(coro):
     """Run an async coroutine in the background event loop."""
@@ -69,9 +71,11 @@ async def _ensure_connection():
             _reader, _writer = await asyncio.open_connection(
                 net_params.server_IP, net_params.server_lidar_port)
             _connected = True
-            print(f"Connected to LIDAR server at {net_params.server_IP}:{net_params.server_lidar_port}")
+            _client_log(
+                f"Connected to LIDAR server at {net_params.server_IP}:{net_params.server_lidar_port}"
+            )
         except Exception as e:
-            print(f"Failed to connect to LIDAR server: {e}")
+            _client_log(f"Failed to connect to LIDAR server: {e}")
             raise
 
 
@@ -88,6 +92,10 @@ async def _send_command(command, *args):
             _writer.write(struct.pack('i', arg))
         elif isinstance(arg, float):
             _writer.write(struct.pack('f', arg))
+        elif isinstance(arg, str):
+            encoded = arg.encode('utf-8')
+            _writer.write(struct.pack('i', len(encoded)))
+            _writer.write(encoded)
     
     await _writer.drain()
 
@@ -95,6 +103,7 @@ async def _send_command(command, *args):
 async def _connect_async(port=LIDAR_PORT, baudrate=LIDAR_BAUD):
     """Async implementation of connect."""
     try:
+        _client_log(f"[lidar] connect request port={port} baudrate={baudrate}")
         await _send_command(net_params.CMD_CONNECT, port, baudrate)
         
         # Read response: success flag (1 byte) + lidar_id (4 bytes)
@@ -103,13 +112,13 @@ async def _connect_async(port=LIDAR_PORT, baudrate=LIDAR_BAUD):
         lidar_id = struct.unpack('i', response[1:5])[0]
         
         if success:
-            print(f'[lidar] Connected successfully, LIDAR ID: {lidar_id}')
+            _client_log(f'[lidar] Connected successfully, LIDAR ID: {lidar_id}')
             return lidar_id
         else:
-            print(f'[lidar] Could not connect on port {port}')
+            _client_log(f'[lidar] Could not connect on port {port}')
             return None
     except Exception as e:
-        print(f'[lidar] Connection error: {e}')
+        _client_log(f'[lidar] Connection error: {e}')
         return None
 
 
@@ -125,10 +134,10 @@ async def _get_scan_mode_async(lidar_id):
         if mode >= 0:
             return mode
         else:
-            print(f"[lidar] Failed to get scan mode for LIDAR {lidar_id}, using default mode 2")
+            _client_log(f"[lidar] Failed to get scan mode for LIDAR {lidar_id}, using default mode 2")
             return 2
     except Exception as e:
-        print(f"[lidar] Error getting scan mode: {e}")
+        _client_log(f"[lidar] Error getting scan mode: {e}")
         return 2
 
 
@@ -143,7 +152,7 @@ async def _start_scan_rounds_async(lidar_id, mode):
         
         return bool(success)
     except Exception as e:
-        print(f"[lidar] Error starting scan rounds: {e}")
+        _client_log(f"[lidar] Error starting scan rounds: {e}")
         return False
 
 
@@ -179,7 +188,7 @@ async def _get_next_scan_round_async(lidar_id):
         
         return angles, distances
     except Exception as e:
-        print(f"[lidar] Error getting scan round: {e}")
+        _client_log(f"[lidar] Error getting scan round: {e}")
         return None
 
 
@@ -193,11 +202,11 @@ async def _disconnect_async(lidar_id):
         success = struct.unpack('b', response)[0]
         
         if success:
-            print(f'[lidar] LIDAR {lidar_id} disconnected successfully')
+            _client_log(f'[lidar] LIDAR {lidar_id} disconnected successfully')
         else:
-            print(f'[lidar] Failed to disconnect LIDAR {lidar_id}')
+            _client_log(f'[lidar] Failed to disconnect LIDAR {lidar_id}')
     except Exception as e:
-        print(f'[lidar] Error disconnecting: {e}')
+        _client_log(f'[lidar] Error disconnecting: {e}')
 
 
 # ============================================================================
@@ -237,7 +246,7 @@ def scan_rounds(lidar_id, mode) -> Generator[Tuple[List[float], List[float]], No
     """
     # Start scan on server
     if not _run_in_background_loop(_start_scan_rounds_async(lidar_id, mode)):
-        print(f"[lidar] Failed to start scan rounds for LIDAR {lidar_id}")
+        _client_log(f"[lidar] Failed to start scan rounds for LIDAR {lidar_id}")
         return
     
     # Yield scans in a loop

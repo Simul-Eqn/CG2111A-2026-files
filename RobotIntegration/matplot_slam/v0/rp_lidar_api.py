@@ -124,10 +124,21 @@ async def handle_client(reader, writer):
                 break
             
             elif command == net_params.CMD_CONNECT:
-                port_data = await reader.readexactly(4)
-                port = struct.unpack('i', port_data)[0]
-                baud_data = await reader.readexactly(4)
-                baudrate = struct.unpack('i', baud_data)[0]
+                # Preferred format: [port_len:int32][port:utf8 bytes][baud:int32]
+                # Legacy format fallback: [port_as_int:int32][baud:int32]
+                first_data = await reader.readexactly(4)
+                first_value = struct.unpack('i', first_data)[0]
+
+                if 0 <= first_value <= 1024:
+                    port_len = first_value
+                    port_bytes = await reader.readexactly(port_len)
+                    port = port_bytes.decode('utf-8')
+                    baud_data = await reader.readexactly(4)
+                    baudrate = struct.unpack('i', baud_data)[0]
+                else:
+                    port = str(first_value)
+                    baud_data = await reader.readexactly(4)
+                    baudrate = struct.unpack('i', baud_data)[0]
                 
                 lidar = connect(port=port, baudrate=baudrate)
                 if lidar is not None:
