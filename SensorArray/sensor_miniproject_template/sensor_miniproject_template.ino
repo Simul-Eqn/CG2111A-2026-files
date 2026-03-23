@@ -374,7 +374,7 @@ void setup() {
     TCCR2A = (1 << WGM21); 
     // prescaler 128, TOP 125, gives 1ms per tick 
     // prescaler 128 is 101 
-    OCRA = 125; 
+    OCR2A = 125; 
     // enable interrupt timer2A 
     TIMSK2 = 0b10; 
 
@@ -386,7 +386,7 @@ void setup() {
     // COMMAND_COLOUR_SENSOR RESP_COLOUR
     
     // Color Sensor
-    INIT_COLOR_SENSOR()
+    INIT_COLOR_SENSOR();
 
 
     
