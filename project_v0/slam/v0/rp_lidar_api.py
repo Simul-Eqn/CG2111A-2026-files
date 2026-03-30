@@ -16,6 +16,7 @@ The LIDAR_PORT and LIDAR_BAUD settings live in settings.py.
 import mpsv0_connection_params as net_params 
 import struct 
 import asyncio 
+import serial
 
 import sys 
 from pathlib import Path 
@@ -24,8 +25,35 @@ print(sys.path[1])
 
 import time
 from pyrplidar import PyRPlidar
+import camera_handler as CameraHandler
+
+from packets import (
+    PACKET_TYPE_COMMAND,
+    PACKET_TYPE_RESPONSE,
+    COMMAND_ESTOP,
+    COMMAND_COLOR_SENSOR,
+    COMMAND_FORWARD,
+    COMMAND_BACKWARD,
+    COMMAND_LEFT,
+    COMMAND_RIGHT,
+    COMMAND_SET_SPEED,
+    COMMAND_STOP,
+    RESP_STATUS,
+    RESP_COLOR_SENSOR,
+    STATE_RUNNING,
+    STATE_STOPPED,
+    MAGIC,
+    MAX_STR_LEN,
+    PARAMS_COUNT,
+    TPACKET_FMT,
+    TPACKET_SIZE,
+)
 
 from settings import LIDAR_PORT, LIDAR_BAUD
+
+
+ARDUINO_PORT = "/dev/ttyACM0"
+ARDUINO_BAUD = 9600
 
 
 def connect(port=LIDAR_PORT, baudrate=LIDAR_BAUD):
@@ -98,6 +126,149 @@ def disconnect(lidar):
         pass
 
 
+_arduino_ser = None
+_estop_state = STATE_RUNNING
+_camera_connected = False
+_frames_remaining = 5
+_motor_speed = 150
+
+
+def _compute_checksum(data: bytes) -> int:
+    result = 0
+    for b in data:
+        result ^= b
+    return result
+
+
+def _pack_frame(packet_type, command, data=b'', params=None):
+    if params is None:
+        params = [0] * PARAMS_COUNT
+    data_padded = (data + b'\x00' * MAX_STR_LEN)[:MAX_STR_LEN]
+    packet_bytes = struct.pack(TPACKET_FMT, packet_type, command, data_padded, *params)
+    checksum = _compute_checksum(packet_bytes)
+    return MAGIC + packet_bytes + bytes([checksum])
+
+
+def _unpack_tpacket(raw):
+    fields = struct.unpack(TPACKET_FMT, raw)
+    return {
+        'packetType': fields[0],
+        'command': fields[1],
+        'data': fields[2],
+        'params': list(fields[3:]),
+    }
+
+
+def _open_arduino_serial(port=ARDUINO_PORT, baudrate=ARDUINO_BAUD):
+    global _arduino_ser
+    if _arduino_ser and _arduino_ser.is_open:
+        return True
+    try:
+        _arduino_ser = serial.Serial(port, baudrate, timeout=0.2)
+        time.sleep(2)
+        _arduino_ser.reset_input_buffer()
+        _arduino_ser.reset_output_buffer()
+        return True
+    except Exception as exc:
+        print(f"[sensor] Failed to open serial {port}@{baudrate}: {exc}")
+        _arduino_ser = None
+        return False
+
+
+def _close_arduino_serial():
+    global _arduino_ser
+    try:
+        if _arduino_ser and _arduino_ser.is_open:
+            _arduino_ser.close()
+    finally:
+        _arduino_ser = None
+
+
+def _serial_ready():
+    return _arduino_ser is not None and _arduino_ser.is_open
+
+
+def _receive_frame():
+    if not _serial_ready():
+        return None
+
+    magic_hi = MAGIC[0]
+    magic_lo = MAGIC[1]
+
+    while True:
+        b = _arduino_ser.read(1)
+        if not b:
+            return None
+        if b[0] != magic_hi:
+            continue
+
+        b = _arduino_ser.read(1)
+        if not b:
+            return None
+        if b[0] != magic_lo:
+            continue
+
+        raw = b''
+        while len(raw) < TPACKET_SIZE:
+            chunk = _arduino_ser.read(TPACKET_SIZE - len(raw))
+            if not chunk:
+                return None
+            raw += chunk
+
+        cs_byte = _arduino_ser.read(1)
+        if not cs_byte:
+            return None
+        if cs_byte[0] != _compute_checksum(raw):
+            continue
+
+        return _unpack_tpacket(raw)
+
+
+def _consume_packet_state(pkt):
+    global _estop_state
+    if pkt['packetType'] == PACKET_TYPE_RESPONSE and pkt['command'] == RESP_STATUS:
+        _estop_state = pkt['params'][0]
+
+
+def _await_response(expected_cmd=None, timeout_sec=1.0):
+    deadline = time.time() + timeout_sec
+    while time.time() < deadline:
+        pkt = _receive_frame()
+        if not pkt:
+            continue
+        _consume_packet_state(pkt)
+        if expected_cmd is None:
+            return pkt
+        if pkt['packetType'] == PACKET_TYPE_RESPONSE and pkt['command'] == expected_cmd:
+            return pkt
+    return None
+
+
+def _send_sensor_command(command_type, data=b'', params=None):
+    if not _serial_ready():
+        return False
+    frame = _pack_frame(PACKET_TYPE_COMMAND, command_type, data=data, params=params)
+    _arduino_ser.write(frame)
+    return True
+
+
+def _is_estop_active():
+    return _estop_state == STATE_STOPPED
+
+
+def _ensure_camera_connected():
+    global _camera_connected
+    if _camera_connected:
+        return True
+    try:
+        CameraHandler.camera_connect()
+        _camera_connected = True
+        return True
+    except Exception as exc:
+        print(f"[sensor] Camera connect failed: {exc}")
+        return False
+
+
 
 
 # api handler 
@@ -109,7 +280,7 @@ next_lidar_id = 1
 scan_mode_tracker = {}
 
 async def handle_client(reader, writer):
-    global next_lidar_id
+    global next_lidar_id, _frames_remaining, _motor_speed
     addr = writer.get_extra_info('peername')
     print(f"Connected by {addr}")
     client_lidar_id = None
@@ -237,6 +408,116 @@ async def handle_client(reader, writer):
                 writer.write(response)
                 await writer.drain()
 
+            elif command == net_params.CMD_SENSOR_SERIAL_CONNECT:
+                first_data = await reader.readexactly(4)
+                first_value = struct.unpack('i', first_data)[0]
+
+                if 0 <= first_value <= 1024:
+                    port_len = first_value
+                    port_bytes = await reader.readexactly(port_len)
+                    port = port_bytes.decode('utf-8')
+                    baud_data = await reader.readexactly(4)
+                    baudrate = struct.unpack('i', baud_data)[0]
+                else:
+                    port = str(first_value)
+                    baud_data = await reader.readexactly(4)
+                    baudrate = struct.unpack('i', baud_data)[0]
+
+                ok = _open_arduino_serial(port=port, baudrate=baudrate)
+                writer.write(struct.pack('b', 1 if ok else 0))
+                await writer.drain()
+
+            elif command == net_params.CMD_SENSOR_SERIAL_DISCONNECT:
+                _close_arduino_serial()
+                writer.write(struct.pack('b', 1))
+                await writer.drain()
+
+            elif command == net_params.CMD_SENSOR_ESTOP:
+                ok = _send_sensor_command(COMMAND_ESTOP, data=b'Remote E-Stop')
+                if ok:
+                    _await_response(expected_cmd=None, timeout_sec=0.6)
+                writer.write(struct.pack('b', 1 if ok else 0))
+                await writer.drain()
+
+            elif command == net_params.CMD_SENSOR_GET_STATUS:
+                writer.write(struct.pack('<bi', 1, int(_estop_state)))
+                await writer.drain()
+
+            elif command == net_params.CMD_SENSOR_GET_COLOR:
+                if _is_estop_active():
+                    writer.write(struct.pack('<biii', 0, 0, 0, 0))
+                    await writer.drain()
+                    continue
+
+                ok = _send_sensor_command(COMMAND_COLOR_SENSOR)
+                if not ok:
+                    writer.write(struct.pack('<biii', 0, 0, 0, 0))
+                    await writer.drain()
+                    continue
+
+                pkt = _await_response(expected_cmd=RESP_COLOR_SENSOR, timeout_sec=1.2)
+                if pkt:
+                    r, g, b = int(pkt['params'][0]), int(pkt['params'][1]), int(pkt['params'][2])
+                    writer.write(struct.pack('<biii', 1, r, g, b))
+                else:
+                    writer.write(struct.pack('<biii', 0, 0, 0, 0))
+                await writer.drain()
+
+            elif command == net_params.CMD_SENSOR_DRIVE:
+                drive_cmd_data = await reader.readexactly(4)
+                drive_cmd = struct.unpack('i', drive_cmd_data)[0]
+
+                allowed = {
+                    COMMAND_FORWARD,
+                    COMMAND_BACKWARD,
+                    COMMAND_LEFT,
+                    COMMAND_RIGHT,
+                    COMMAND_STOP,
+                }
+                ok = drive_cmd in allowed and (not _is_estop_active()) and _send_sensor_command(drive_cmd)
+                if ok:
+                    _await_response(expected_cmd=None, timeout_sec=0.5)
+                writer.write(struct.pack('b', 1 if ok else 0))
+                await writer.drain()
+
+            elif command == net_params.CMD_SENSOR_SET_SPEED:
+                speed_data = await reader.readexactly(4)
+                speed = struct.unpack('i', speed_data)[0]
+                speed = max(0, min(255, speed))
+
+                ok = (not _is_estop_active()) and _send_sensor_command(
+                    COMMAND_SET_SPEED,
+                    params=[speed] + [0] * (PARAMS_COUNT - 1),
+                )
+                if ok:
+                    _motor_speed = speed
+                    _await_response(expected_cmd=None, timeout_sec=0.5)
+                writer.write(struct.pack('b', 1 if ok else 0))
+                await writer.drain()
+
+            elif command == net_params.CMD_SENSOR_CAMERA_CAPTURE:
+                if _is_estop_active() or _frames_remaining <= 0:
+                    writer.write(struct.pack('b', 0))
+                    await writer.drain()
+                    continue
+
+                if not _ensure_camera_connected():
+                    writer.write(struct.pack('b', 0))
+                    await writer.drain()
+                    continue
+
+                try:
+                    ok = bool(CameraHandler.camera_capture())
+                except Exception as exc:
+                    print(f"[sensor] Camera capture failed: {exc}")
+                    ok = False
+
+                if ok:
+                    _frames_remaining -= 1
+
+                writer.write(struct.pack('b', 1 if ok else 0))
+                await writer.drain()
+
     except asyncio.CancelledError:
         print(f"Client handler task cancelled for {addr}")
     except Exception as e:
@@ -248,6 +529,12 @@ async def handle_client(reader, writer):
                 disconnect(lidar_instances[client_lidar_id])
                 del lidar_instances[client_lidar_id]
             except:
+                pass
+        _close_arduino_serial()
+        if _camera_connected:
+            try:
+                CameraHandler.camera_close()
+            except Exception:
                 pass
         print(f"Closing connection for {addr}")
         writer.close()

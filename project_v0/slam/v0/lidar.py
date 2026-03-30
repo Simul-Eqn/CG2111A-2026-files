@@ -19,6 +19,16 @@ import threading
 
 from typing import Optional, Tuple, List, Generator
 from settings import LIDAR_PORT, LIDAR_BAUD
+from packets import (
+    COMMAND_FORWARD,
+    COMMAND_BACKWARD,
+    COMMAND_LEFT,
+    COMMAND_RIGHT,
+    COMMAND_STOP,
+)
+
+ARDUINO_PORT = '/dev/ttyACM0'
+ARDUINO_BAUD = 9600
 
 # Global connection state and event loop
 _reader = None
@@ -209,6 +219,94 @@ async def _disconnect_async(lidar_id):
         _client_log(f'[lidar] Error disconnecting: {e}')
 
 
+async def _sensor_serial_connect_async(port=ARDUINO_PORT, baudrate=ARDUINO_BAUD):
+    try:
+        await _send_command(net_params.CMD_SENSOR_SERIAL_CONNECT, port, baudrate)
+        response = await _reader.readexactly(1)
+        return bool(struct.unpack('b', response)[0])
+    except Exception as e:
+        _client_log(f"[sensor] Serial connect failed: {e}")
+        return False
+
+
+async def _sensor_serial_disconnect_async():
+    try:
+        await _send_command(net_params.CMD_SENSOR_SERIAL_DISCONNECT)
+        response = await _reader.readexactly(1)
+        return bool(struct.unpack('b', response)[0])
+    except Exception as e:
+        _client_log(f"[sensor] Serial disconnect failed: {e}")
+        return False
+
+
+async def _sensor_estop_async():
+    try:
+        await _send_command(net_params.CMD_SENSOR_ESTOP)
+        response = await _reader.readexactly(1)
+        return bool(struct.unpack('b', response)[0])
+    except Exception as e:
+        _client_log(f"[sensor] E-Stop failed: {e}")
+        return False
+
+
+async def _sensor_get_status_async():
+    try:
+        await _send_command(net_params.CMD_SENSOR_GET_STATUS)
+        response = await _reader.readexactly(5)
+        success = struct.unpack('<b', response[0:1])[0]
+        state = struct.unpack('<i', response[1:5])[0]
+        if not success:
+            return None
+        return state
+    except Exception as e:
+        _client_log(f"[sensor] Get status failed: {e}")
+        return None
+
+
+async def _sensor_get_color_async():
+    try:
+        await _send_command(net_params.CMD_SENSOR_GET_COLOR)
+        response = await _reader.readexactly(13)
+        success, r, g, b = struct.unpack('<biii', response)
+        if not success:
+            return None
+        return r, g, b
+    except Exception as e:
+        _client_log(f"[sensor] Get color failed: {e}")
+        return None
+
+
+async def _sensor_drive_async(drive_cmd):
+    try:
+        await _send_command(net_params.CMD_SENSOR_DRIVE, drive_cmd)
+        response = await _reader.readexactly(1)
+        return bool(struct.unpack('b', response)[0])
+    except Exception as e:
+        _client_log(f"[sensor] Drive command failed: {e}")
+        return False
+
+
+async def _sensor_set_speed_async(speed):
+    try:
+        speed = max(0, min(255, int(speed)))
+        await _send_command(net_params.CMD_SENSOR_SET_SPEED, speed)
+        response = await _reader.readexactly(1)
+        return bool(struct.unpack('b', response)[0])
+    except Exception as e:
+        _client_log(f"[sensor] Set speed failed: {e}")
+        return False
+
+
+async def _sensor_camera_capture_async():
+    try:
+        await _send_command(net_params.CMD_SENSOR_CAMERA_CAPTURE)
+        response = await _reader.readexactly(1)
+        return bool(struct.unpack('b', response)[0])
+    except Exception as e:
+        _client_log(f"[sensor] Camera capture failed: {e}")
+        return False
+
+
 # ============================================================================
 # PUBLIC SYNCHRONOUS API (100% compatible with original interface)
 # ============================================================================
@@ -261,5 +359,65 @@ def scan_rounds(lidar_id, mode) -> Generator[Tuple[List[float], List[float]], No
 def disconnect(lidar_id):
     """Stop the LIDAR motor and close the serial connection."""
     return _run_in_background_loop(_disconnect_async(lidar_id))
+
+
+def sensor_serial_connect(port=ARDUINO_PORT, baudrate=ARDUINO_BAUD):
+    """Connect rp_lidar_api.py to the Arduino sensor serial link."""
+    return _run_in_background_loop(_sensor_serial_connect_async(port, baudrate))
+
+
+def sensor_serial_disconnect():
+    """Disconnect rp_lidar_api.py from the Arduino sensor serial link."""
+    return _run_in_background_loop(_sensor_serial_disconnect_async())
+
+
+def sensor_estop():
+    """Trigger software E-Stop on the Arduino side."""
+    return _run_in_background_loop(_sensor_estop_async())
+
+
+def sensor_get_status():
+    """Return current E-Stop state as integer (STATE_RUNNING or STATE_STOPPED)."""
+    return _run_in_background_loop(_sensor_get_status_async())
+
+
+def sensor_get_color():
+    """Request one color-sensor reading; returns (r, g, b) in Hz or None."""
+    return _run_in_background_loop(_sensor_get_color_async())
+
+
+def sensor_drive(command):
+    """Send a movement command (FORWARD/BACKWARD/LEFT/RIGHT/STOP)."""
+    return _run_in_background_loop(_sensor_drive_async(command))
+
+
+def sensor_forward():
+    return sensor_drive(COMMAND_FORWARD)
+
+
+def sensor_backward():
+    return sensor_drive(COMMAND_BACKWARD)
+
+
+def sensor_left():
+    return sensor_drive(COMMAND_LEFT)
+
+
+def sensor_right():
+    return sensor_drive(COMMAND_RIGHT)
+
+
+def sensor_stop():
+    return sensor_drive(COMMAND_STOP)
+
+
+def sensor_set_speed(speed):
+    """Set motor speed in range [0, 255]."""
+    return _run_in_background_loop(_sensor_set_speed_async(speed))
+
+
+def sensor_camera_capture():
+    """Capture and forward one camera frame using camera_handler."""
+    return _run_in_background_loop(_sensor_camera_capture_async())
 
 
