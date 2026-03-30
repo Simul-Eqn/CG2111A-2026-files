@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Studio 16: Robot Integration
+Studio 17: Transport Layer Security (TLS)
 net_utils.py  -  Network utilities for the second terminal relay.
 
 Provides a minimal, SSL-upgradeable TCP layer used by:
-  - pi_sensor.py        (acts as the server for second_terminal.py)
-  - second_terminal.py  (client that connects to pi_sensor.py)
+  - pi_sensor.py        (starts the relay that accepts the second terminal)
+  - second_terminal.py  (client that connects to that relay)
 
 Public API
 ----------
@@ -195,7 +195,11 @@ class TCPServer:
             conn, addr = self._server_sock.accept()
             if self.ssl_context:
                 conn = self.ssl_context.wrap_socket(conn, server_side=True)
-            conn.setblocking(False)
+            # Keep the connected socket blocking. hasData() already uses select()
+            # to avoid blocking the main loop, and framed reads need blocking
+            # semantics so a partial TCP/TLS record is not mistaken for a
+            # disconnect.
+            conn.setblocking(True)
             self.conn = conn
             print(f"[TCPServer] Client connected from {addr}")
             return conn
@@ -278,7 +282,10 @@ class TCPClient:
                     s,
                     server_hostname=self.server_hostname or self.host,
                 )
-            s.setblocking(False)
+            # Keep the connected socket blocking for the same reason as on the
+            # server side: select() handles readiness, while framed reads need
+            # to block until the full message is available.
+            s.setblocking(True)
             self.sock = s
             print(f"[TCPClient] Connected to {self.host}:{self.port}")
             return True

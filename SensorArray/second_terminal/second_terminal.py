@@ -1,20 +1,18 @@
 #!/usr/bin/env python3
 """
-Studio 16: Robot Integration
-second_terminal.py  -  Second operator terminal.
+Studio 17: Transport Layer Security (TLS)
+second_terminal.py  -  Second operator terminal client.
 
-This terminal connects to pi_sensor.py over TCP.  It:
-  - Displays every TPacket forwarded from the robot (via pi_sensor.py).
+This terminal connects to the second-terminal relay on the Raspberry Pi over
+TCP / TLS. It:
+  - Displays every TPacket forwarded by the relay from the robot.
   - Sends a software E-Stop command when you type 'e'.
 
-Architecture
-------------
-   [Arduino] <--USB serial--> [pi_sensor.py] <--TCP--> [second_terminal.py]
-                                (TCP server,               (TCP client,
-                                 port 65432)                localhost:65432)
-
-Run pi_sensor.py FIRST (it starts the TCP server), then run this script.
-Both scripts run on the same Raspberry Pi.
+Recommended usage for this studio:
+  - Run pi_sensor.py on the Raspberry Pi.
+  - Run this client from a WebTop terminal.
+  - Set PI_HOST to the Pi's Tailscale IP address (recommended), or to the
+    exact Tailscale hostname you plan to verify in the certificate.
 
 IMPORTANT: Update the TPacket constants below to match your pi_sensor.py.
 ---------------------------------------------------------------------------
@@ -30,24 +28,24 @@ avoids hard-to-find bugs caused by constants getting out of sync.
 
 Commands
 --------
-  e   Send a software E-Stop to the robot (same as pressing the button).
+  e   Send a software E-Stop to the robot. For this studio, the packet also
+      carries the text "secret information" in its data field so it is easy
+      to spot in a plain-TCP capture.
   q   Quit.
 
 Usage
 -----
-    source env/bin/activate
     python3 second_terminal/second_terminal.py
 
 Press Ctrl+C to exit.
 """
 
 import select
+import ssl
 import struct
 import sys
-import time
-
-from pathlib import Path 
-sys.path.insert(1, str(Path(__file__).parent.parent))
+import threading
+from pathlib import Path
 
 # net_utils is imported with an absolute import because this script is designed
 # to be run directly (python3 second_terminal/second_terminal.py), which adds
@@ -58,18 +56,43 @@ from net_utils import TCPClient, sendTPacketFrame, recvTPacketFrame
 # ---------------------------------------------------------------------------
 # Connection settings
 # ---------------------------------------------------------------------------
-# Both scripts run on the same Pi, so the host is 'localhost'.
-# Change PI_HOST to the Pi's IP address if you run this from a different machine.
-PI_HOST = '100.109.145.53'
+# Change PI_HOST to the Pi's Tailscale IP address or verified hostname when
+# running this client from WebTop or another remote machine.
+PI_HOST = 'raspberrypi'
 PI_PORT = 65432
+TLS_ENABLED = True
+
+TLS_CERT_PATH = Path(__file__).parent.parent/'certs'/'server.crt'
+
+# Demo payload used in Studio 17 so plaintext TCP captures show a readable
+# application string before TLS is enabled.
+TCPDUMP_DEMO_TEXT = b'secret information'
 
 
 # ---------------------------------------------------------------------------
 # TPacket constants
 # ---------------------------------------------------------------------------
 # IMPORTANT: keep these in sync with your pi_sensor.py and the Arduino sketch.
-from packets import *
 
+PACKET_TYPE_COMMAND  = 0
+PACKET_TYPE_RESPONSE = 1
+PACKET_TYPE_MESSAGE  = 2
+
+COMMAND_ESTOP = 0
+
+RESP_OK     = 0
+RESP_STATUS = 1
+
+STATE_RUNNING = 0
+STATE_STOPPED = 1
+
+MAX_STR_LEN  = 32
+PARAMS_COUNT = 16
+TPACKET_SIZE = 1 + 1 + 2 + MAX_STR_LEN + (PARAMS_COUNT * 4)   # = 100
+TPACKET_FMT  = f'<BB2x{MAX_STR_LEN}s{PARAMS_COUNT}I'
+
+MAGIC      = b'\xDE\xAD'
+FRAME_SIZE = len(MAGIC) + TPACKET_SIZE + 1   # = 103
 
 
 # ---------------------------------------------------------------------------
@@ -114,6 +137,7 @@ def _unpackFrame(frame: bytes):
 # ---------------------------------------------------------------------------
 
 _estop_active = False
+_shutdown = threading.Event()
 
 
 def _printPacket(pkt):
@@ -156,9 +180,10 @@ def _handleInput(line: str, client: TCPClient):
         return
 
     if line == 'e':
-        frame = _packFrame(PACKET_TYPE_COMMAND, COMMAND_ESTOP)
+        frame = _packFrame(PACKET_TYPE_COMMAND, COMMAND_ESTOP,
+                           data=TCPDUMP_DEMO_TEXT)
         sendTPacketFrame(client.sock, frame)
-        print("[second_terminal] Sent: E-STOP")
+        print("[second_terminal] Sent: E-STOP with demo text 'secret information'")
 
     elif line == 'q':
         print("[second_terminal] Quitting.")
@@ -172,44 +197,74 @@ def _handleInput(line: str, client: TCPClient):
 # Main loop
 # ---------------------------------------------------------------------------
 
-def run():
-    client = TCPClient(host=PI_HOST, port=PI_PORT)
-    print(f"[second_terminal] Connecting to pi_sensor.py at {PI_HOST}:{PI_PORT}...")
+def _receiver_loop(client: TCPClient):
+    while not _shutdown.is_set():
+        frame = recvTPacketFrame(client.sock)
+        if frame is None:
+            if not _shutdown.is_set():
+                print("[second_terminal] Connection to the relay closed.")
+            _shutdown.set()
+            break
 
-    if not client.connect(timeout=10.0):
+        pkt = _unpackFrame(frame)
+        if pkt:
+            _printPacket(pkt)
+
+
+def _make_client_ssl_context():
+    if not TLS_CERT_PATH.is_file():
+        print(f"[second_terminal] ERROR: TLS certificate not found at '{TLS_CERT_PATH}'.")
+        print("  From ~/cg2111a_tls/webtop_client, create certs/ and copy server.crt first.")
+        sys.exit(1)
+
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+    ctx.load_verify_locations(str(TLS_CERT_PATH))
+    ctx.check_hostname = True
+    ctx.verify_mode = ssl.CERT_REQUIRED
+    return ctx
+
+
+def run():
+    _shutdown.clear()
+    ssl_ctx = _make_client_ssl_context() if TLS_ENABLED else None
+    client = TCPClient(
+        host=PI_HOST,
+        port=PI_PORT,
+        ssl_context=ssl_ctx,
+        server_hostname=PI_HOST,
+    )
+    print(f"[second_terminal] Connecting to the relay at {PI_HOST}:{PI_PORT}...")
+
+    if not client.connect(timeout=60.0):
         print("[second_terminal] Could not connect.")
-        print("  Make sure pi_sensor.py is running and waiting for a"
-              " second terminal connection.")
+        print("  Make sure pi_sensor.py is running and that its relay is"
+              " waiting for a second terminal connection.")
         sys.exit(1)
 
     print("[second_terminal] Connected!")
     print("[second_terminal] Commands:  e = E-Stop   q = quit")
     print("[second_terminal] Incoming robot packets will be printed below.\n")
 
-    try:
-        while True:
-            # Check for forwarded TPackets from pi_sensor.py (non-blocking).
-            if client.hasData():
-                frame = recvTPacketFrame(client.sock)
-                if frame is None:
-                    print("[second_terminal] Connection to pi_sensor.py closed.")
-                    break
-                pkt = _unpackFrame(frame)
-                if pkt:
-                    _printPacket(pkt)
+    rx_thread = threading.Thread(target=_receiver_loop, args=(client,), daemon=True)
+    rx_thread.start()
 
-            # Check for keyboard input (non-blocking via select).
-            rlist, _, _ = select.select([sys.stdin], [], [], 0)
+    try:
+        while not _shutdown.is_set():
+            # Check for keyboard input without blocking the receive thread.
+            rlist, _, _ = select.select([sys.stdin], [], [], 0.1)
             if rlist:
                 line = sys.stdin.readline()
+                if not line:
+                    continue
                 _handleInput(line, client)
-
-            time.sleep(0.02)
 
     except KeyboardInterrupt:
         print("\n[second_terminal] Exiting.")
     finally:
+        _shutdown.set()
         client.close()
+        rx_thread.join(timeout=1.0)
 
 
 if __name__ == '__main__':
