@@ -69,11 +69,14 @@ TLS_CERT_PATH = Path(__file__).parent.parent/'certs'/'server.crt'
 TCPDUMP_DEMO_TEXT = b'secret information'
 
 
+# import packets 
+sys.path.insert(1, str(Path(__file__).parent.parent)) 
+from packets import * 
 # ---------------------------------------------------------------------------
 # TPacket constants
 # ---------------------------------------------------------------------------
 # IMPORTANT: keep these in sync with your pi_sensor.py and the Arduino sketch.
-
+'''
 PACKET_TYPE_COMMAND  = 0
 PACKET_TYPE_RESPONSE = 1
 PACKET_TYPE_MESSAGE  = 2
@@ -93,7 +96,7 @@ TPACKET_FMT  = f'<BB2x{MAX_STR_LEN}s{PARAMS_COUNT}I'
 
 MAGIC      = b'\xDE\xAD'
 FRAME_SIZE = len(MAGIC) + TPACKET_SIZE + 1   # = 103
-
+'''
 
 # ---------------------------------------------------------------------------
 # TPacket helpers
