@@ -1,0 +1,37 @@
+int col_nc = 3; 
+    float col_coef[3][3] = {{-0.0014800455259324362, -0.00036041022653417014, 0.0005483478312591322}, {0.0005849681835617133, 0.0019729678391085374, -0.0008954477824324463}, {0.0005729005388274705, -0.000389880075413204, -0.00014339097324402096}};
+    float col_intc[3] = { -2.0659589797650718e-07, 2.2122470464947787e-07, 3.7975206783044333e-08 };
+    int col_predict(float r, float g, float b) {
+        float allvs[3];
+        for (int i=0; i<col_nc; i++) {
+            allvs[i] = col_intc[i];
+        }
+
+        float c; 
+        for (int cidx=0; cidx<3; cidx++) {
+            if (cidx==0) c=r;
+            else if (cidx==1) c=g;
+            else c=b;
+            for (int i=0; i<col_nc; i++){
+                allvs[i] += col_coef[i][cidx]*c;
+            }
+        }
+
+        // get index of max
+        int maxidx = 0; int maxsofar = allvs[0];
+        for (int i=1; i<col_nc; i++) {
+            if (allvs[i] > maxsofar) {
+                maxidx = i;
+                maxsofar = allvs[i];
+            }
+        }
+        return maxidx;
+    }
+
+enum { blue,
+   green,
+   red };
+
+
+NOTE: THE COLOURS ARE AS FOLLOWS:
+['blue' 'green' 'red']
