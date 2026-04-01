@@ -423,7 +423,7 @@ static void readColorChannels(uint32_t *r, uint32_t *g, uint32_t *b, uint32_t *c
     } else {
         *c = 2;
     }*/
-   *c = col_predict((float)r, (float)g, (float)b); // note that it'll output COL_BLUE, COL_GREEN or COL_RED (enum) 
+   *c = col_predict(r, g, b); // note that it'll output COL_BLUE, COL_GREEN or COL_RED (enum) 
 }
 // =============================================================
 // motor
