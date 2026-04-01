@@ -423,7 +423,7 @@ static void readColorChannels(uint32_t *r, uint32_t *g, uint32_t *b, uint32_t *c
     } else {
         *c = 2;
     }*/
-   *c = col_predict(static_cast<float>(*r), static_cast<float>(*g), static_cast<float>(*b)); 
+   *c = col_predict(static_cast<float>(*r), static_cast<float>(*g), static_cast<float>(*b); 
    // note that it'll output COL_BLUE, COL_GREEN or COL_RED (enum) 
 }
 // =============================================================
