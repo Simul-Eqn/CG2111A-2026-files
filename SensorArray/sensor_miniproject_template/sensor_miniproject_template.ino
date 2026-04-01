@@ -45,7 +45,6 @@ AF_DCMotor motorFR(FRONT_RIGHT);
 AF_DCMotor motorBL(BACK_LEFT);
 AF_DCMotor motorBR(BACK_RIGHT);
 
-/*
 struct ColorRef {
   float R;
   float G;
@@ -55,10 +54,6 @@ struct ColorRef {
 ColorRef RED_REF   = {5028/6000.0, 1702/5000.0, 8192/13000.0};
 ColorRef GREEN_REF = {3312/6000.0, 3918/5000.0, 9656/13000.0};
 ColorRef BLUE_REF  = {2714/6000.0, 4142/5000.0, 12100/13000.0};
-*/
-enum { COL_BLUE,
-       COL_GREEN,
-       COL_RED };
 
 int motorSpeed = 150;
 //uint16_t lastDebounceTime = 0; //debounce variable
@@ -354,46 +349,12 @@ static uint32_t measureChannel100ms() {
     return count;
 }
 
-/*
 float colorDistance(float r1, float g1, float b1, ColorRef ref) {
   float dr = r1 - ref.R;
   float dg = g1 - ref.G;
   float db = b1 - ref.B;
   return dr * dr + dg * dg + db * db; // no sqrt needed
 }
-*/
-
-int col_nc = 3; 
-float col_coef[3][3] = {{-0.0014800455259324362, -0.00036041022653417014, 0.0005483478312591322}, {0.0005849681835617133, 0.0019729678391085374, -0.0008954477824324463}, {0.0005729005388274705, -0.000389880075413204, -0.00014339097324402096}};
-float col_intc[3] = { -2.0659589797650718e-07, 2.2122470464947787e-07, 3.7975206783044333e-08 };
-int col_predict(float r, float g, float b) {
-    float allvs[3];
-    for (int i=0; i<col_nc; i++) {
-        allvs[i] = col_intc[i];
-    }
-
-    float c; 
-    for (int cidx=0; cidx<3; cidx++) {
-        if (cidx==0) c=r;
-        else if (cidx==1) c=g;
-        else c=b;
-        for (int i=0; i<col_nc; i++){
-            allvs[i] += col_coef[i][cidx]*c;
-        }
-    }
-
-    // get index of max
-    int maxidx = 0; int maxsofar = allvs[0];
-    for (int i=1; i<col_nc; i++) {
-        if (allvs[i] > maxsofar) {
-            maxidx = i;
-            maxsofar = allvs[i];
-        }
-    }
-    return maxidx;
-}
-
-
 
 static void readColorChannels(uint32_t *r, uint32_t *g, uint32_t *b, uint32_t *c) {
     selectRed();
@@ -408,7 +369,7 @@ static void readColorChannels(uint32_t *r, uint32_t *g, uint32_t *b, uint32_t *c
     _delay_ms(5);
     *b = measureChannel100ms() * 10;   // Hz
 
-    /*float rN = *r / 6000.0;
+    float rN = *r / 6000.0;
     float gN = *g / 5000.0;
     float bN = *b / 13000.0;
 
@@ -422,8 +383,7 @@ static void readColorChannels(uint32_t *r, uint32_t *g, uint32_t *b, uint32_t *c
         *c = 1;
     } else {
         *c = 2;
-    }*/
-   *c = col_predict(r, g, b); // note that it'll output COL_BLUE, COL_GREEN or COL_RED (enum) 
+    }
 }
 // =============================================================
 // motor
