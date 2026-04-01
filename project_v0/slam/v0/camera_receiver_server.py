@@ -1,6 +1,6 @@
 PORT = 12346
 
-DISPLAY_SIZE = (192*5, 108*5) 
+DISPLAY_SIZE = (80*5, 44*5) 
 
 import cv2
 import numpy as np

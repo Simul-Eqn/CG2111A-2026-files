@@ -241,8 +241,7 @@ def _ensure_camera_connected():
     if _camera_connected:
         return True
     try:
-        # DON'T USE CAMERA HERE SO IT CAN BE USED BY OTHER PROCESS ALWAYS TRANSMITTING 
-        #CameraHandler.camera_connect()
+        CameraHandler.camera_connect()
         _camera_connected = True
         return True
     except Exception as exc:

@@ -53,6 +53,8 @@ from renderer import (
     _GLYPH_FREE_CLEAR, _STYLE_FREE_CLEAR,
     mm_to_map_px, pan_step_mm, robot_glyph, render_map_numpy,
 )
+import time
+import lidar
 
 
 class SlamApp(App[None]):
@@ -68,7 +70,7 @@ class SlamApp(App[None]):
         padding: 0 0;
     }
     #header {
-        height: auto;
+        height: 1;
         content-align: left middle;
         color: white;
         background: #1d2630;
@@ -82,16 +84,26 @@ class SlamApp(App[None]):
         background: #0b0f14;
     }
     #status {
-        height: auto;
+        height: 2;
         color: white;
         background: #182028;
         padding: 0 1;
+        content-align: left middle;
+        overflow: hidden;
+    }
+    #sensor_display {
+        height: 1;
+        color: #90EE90;
+        background: #1a2a1a;
+        padding: 0 1;
+        overflow: hidden;
     }
     #help {
-        height: auto;
+        height: 2;
         color: #b8c4cf;
         background: #141b22;
         padding: 0 1;
+        overflow: hidden;
     }
     Footer {
         background: #1d2630;
@@ -116,8 +128,18 @@ class SlamApp(App[None]):
         Binding('k',     'pan_up',      'Pan Up',    show=False),
         Binding('down',  'pan_down',    'Pan Down',  show=False),
         Binding('j',     'pan_down',    'Pan Down',  show=False),
-        Binding('c',     'center',      'Center'),
+        Binding('t',     'center',      'Center'),
         Binding('p',     'pause_toggle','Pause'),
+        Binding('e',     'sensor_estop','E-Stop'),
+        Binding('c', 'sensor_color', 'Color',  show=False),
+        Binding('f', 'sensor_camera', 'Camera', show=False),
+        Binding('w',     'sensor_forward', 'Forward', show=False),
+        Binding('s',     'sensor_backward', 'Backward', show=False),
+        Binding('a',     'sensor_left',   'Left',   show=False),
+        Binding('d',     'sensor_right',  'Right',  show=False),
+        Binding('x',     'sensor_stop',   'Stop',   show=False),
+        Binding('bracketright', 'sensor_speed_up', 'Faster', show=False),
+        Binding('bracketleft', 'sensor_speed_down', 'Slower', show=False),
         Binding('q',     'quit',        'Quit'),
     ]
 
@@ -138,20 +160,41 @@ class SlamApp(App[None]):
         # Cache the last render key so we skip redraws when nothing changed.
         self._last_render_key: tuple = ()
         self._cached_robot_visible = False
+        # Sensor command state
+        self._sensor_result = ""
+        self._sensor_result_time = 0.0
+        self._motor_speed = 150
+        # Persistent sensor state (color, drive)
+        self._last_color = None
+        self._last_color_time = 0.0
+        self._last_drive_cmd = None
+        self._last_drive_time = 0.0
 
     def compose(self) -> ComposeResult:
         with Vertical(id='root'):
             yield Static(id='header')
             yield Static(id='map')
             yield Static(id='status')
+            yield Static(id='sensor_display')
             yield Static(id='help')
         yield Footer()
 
     def on_mount(self) -> None:
         self.slam_proc.start()
+        # Initialize remote sensor serial connection
+        try:
+            lidar.sensor_serial_connect()
+        except Exception as e:
+            # Connection may fail if server not available; that's ok, UI still works for SLAM
+            pass
         self.set_interval(1.0 / UI_REFRESH_HZ, self._refresh_view)
 
     def on_unmount(self) -> None:
+        # Disconnect sensor serial on exit
+        try:
+            lidar.sensor_serial_disconnect()
+        except Exception:
+            pass
         # Signal the SLAM process to stop, then wait for it to exit cleanly.
         self.pss.stop_event.set()
         if self.slam_proc.is_alive():
@@ -206,6 +249,102 @@ class SlamApp(App[None]):
     def action_quit(self) -> None:
         self.pss.stop_event.set()
         self.exit()
+
+    # -----------------------------------------------------------------------
+    # Sensor control actions
+    # -----------------------------------------------------------------------
+
+    def _set_sensor_result(self, msg: str) -> None:
+        """Set the sensor result message with a timestamp."""
+        self._sensor_result = msg
+        self._sensor_result_time = time.time()
+
+    def _get_sensor_result_display(self) -> str:
+        """Return the sensor result if it's still fresh (within 3 seconds)."""
+        if self._sensor_result and time.time() - self._sensor_result_time < 3.0:
+            return self._sensor_result
+        return ""
+
+    def action_sensor_estop(self) -> None:
+        """Trigger software E-Stop command."""
+        ok = lidar.sensor_estop()
+        if ok:
+            state = lidar.sensor_get_status()
+            state_text = "RUNNING" if state == 0 else "STOPPED" if state == 1 else f"unknown({state})"
+            self._set_sensor_result(f"[E-STOP] Status: {state_text}")
+        else:
+            self._set_sensor_result("[E-STOP] Failed")
+
+    def action_sensor_color(self) -> None:
+        """Request color sensor reading."""
+        rgb = lidar.sensor_get_color()
+        if rgb:
+            r, g, b = rgb
+            self._last_color = (r, g, b)
+            self._last_color_time = time.time()
+            self._set_sensor_result(f"[COLOR] Read OK")
+        else:
+            self._set_sensor_result("[COLOR] Read failed")
+
+    def action_sensor_camera(self) -> None:
+        """Capture and send camera frame."""
+        ok = lidar.sensor_camera_capture()
+        if ok:
+            self._set_sensor_result("[CAMERA] Frame captured")
+        else:
+            self._set_sensor_result("[CAMERA] Capture failed")
+
+    def action_sensor_forward(self) -> None:
+        """Drive forward."""
+        ok = lidar.sensor_forward()
+        if ok:
+            self._last_drive_cmd = "Forward"
+            self._last_drive_time = time.time()
+        self._set_sensor_result("[DRIVE] Forward" if ok else "[DRIVE] Forward failed")
+
+    def action_sensor_backward(self) -> None:
+        """Drive backward."""
+        ok = lidar.sensor_backward()
+        if ok:
+            self._last_drive_cmd = "Backward"
+            self._last_drive_time = time.time()
+        self._set_sensor_result("[DRIVE] Backward" if ok else "[DRIVE] Backward failed")
+
+    def action_sensor_left(self) -> None:
+        """Turn left."""
+        ok = lidar.sensor_left()
+        if ok:
+            self._last_drive_cmd = "Left"
+            self._last_drive_time = time.time()
+        self._set_sensor_result("[DRIVE] Left" if ok else "[DRIVE] Left failed")
+
+    def action_sensor_right(self) -> None:
+        """Turn right."""
+        ok = lidar.sensor_right()
+        if ok:
+            self._last_drive_cmd = "Right"
+            self._last_drive_time = time.time()
+        self._set_sensor_result("[DRIVE] Right" if ok else "[DRIVE] Right failed")
+
+    def action_sensor_stop(self) -> None:
+        """Stop motors."""
+        ok = lidar.sensor_stop()
+        if ok:
+            self._last_drive_cmd = "Stop"
+            self._last_drive_time = time.time()
+        self._set_sensor_result("[DRIVE] Stop" if ok else "[DRIVE] Stop failed")
+
+    def action_sensor_speed_up(self) -> None:
+        """Increase motor speed."""
+        self._motor_speed = min(255, self._motor_speed + 20)
+        ok = lidar.sensor_set_speed(self._motor_speed)
+        self._set_sensor_result(f"[SPEED] {self._motor_speed}" if ok else "[SPEED] Set failed")
+
+    def action_sensor_speed_down(self) -> None:
+        """Decrease motor speed."""
+        self._motor_speed = max(0, self._motor_speed - 20)
+        ok = lidar.sensor_set_speed(self._motor_speed)
+        self._set_sensor_result(f"[SPEED] {self._motor_speed}" if ok else "[SPEED] Set failed")
 
     # -----------------------------------------------------------------------
     # Read a snapshot from shared memory
@@ -346,6 +485,7 @@ class SlamApp(App[None]):
             header      = self.query_one('#header',  Static)
             map_widget  = self.query_one('#map',     Static)
             status_widget = self.query_one('#status', Static)
+            sensor_display = self.query_one('#sensor_display', Static)
             help_widget = self.query_one('#help',    Static)
         except Exception:
             return
@@ -397,20 +537,41 @@ class SlamApp(App[None]):
 
         robot_visible = self._cached_robot_visible
 
-        # Status bar: pose, scan quality, pan offset, and any warnings.
-        status_line = (
+        # Status bar line 1: pose, scan quality, pan offset, and any warnings.
+        status_line_1 = (
             f'Pose x={snapshot["x_mm"]:6.0f}mm  '
             f'y={snapshot["y_mm"]:6.0f}mm  '
             f'th={snapshot["theta_deg"]:+6.1f}deg | '
             f'valid={snapshot["valid_points"]:3d} | '
-            f'pan={pan_text} | '
-            f'{snapshot["status_note"]}'
+            f'pan={pan_text}'
         )
         if not robot_visible:
-            status_line += ' | robot off-screen'
+            status_line_1 += ' | robot off-screen'
         if snapshot['error_message']:
-            status_line += f' | ERROR: {snapshot["error_message"]}'
-        status_widget.update(status_line)
+            status_line_1 += f' | ERROR: {snapshot["error_message"]}'
+
+        # Status bar line 2: SLAM status and sensor feedback
+        status_line_2 = f'{snapshot["status_note"]}'
+        sensor_msg = self._get_sensor_result_display()
+        if sensor_msg:
+            status_line_2 += f' | {sensor_msg}'
+
+        status_widget.update(status_line_1 + '\n' + status_line_2)
+
+        # Sensor display: persistent color reading and drive state
+        sensor_display_text = ""
+        if self._last_color:
+            now = time.time()
+            elapsed = now - self._last_color_time
+            r, g, b = self._last_color
+            sensor_display_text += f"Color: R={r:4d}Hz G={g:4d}Hz B={b:4d}Hz  ({elapsed:.1f}s ago)"
+        if self._last_drive_cmd:
+            now = time.time()
+            elapsed = now - self._last_drive_time
+            sensor_display_text += f"  |  Drive: {self._last_drive_cmd} ({elapsed:.1f}s ago)  Speed: {self._motor_speed}"
+        else:
+            sensor_display_text += f"  |  Speed: {self._motor_speed}"
+        sensor_display.update(sensor_display_text if sensor_display_text else "[No sensor data]")
 
         # Help bar: map legend and key hints.
         help_widget.update(
@@ -421,8 +582,8 @@ class SlamApp(App[None]):
             f'[{_STYLE_UNKNOWN}]{_GLYPH_UNKNOWN} unknown[/]  '
             f'[{_STYLE_FREE_CLEAR}]{_GLYPH_FREE_CLEAR} free[/]  '
             f'[{_STYLE_ROBOT}]\u25c9 robot[/]  |  '
-            'Keys: +/- zoom  1-5 jump  arrows/hjkl pan  '
-            'c center  p pause  q quit'
+            'Map: +/- zoom  1-5 jump  arrows/hjkl pan  t center  p pause  |  '
+            'Sensor: e estop  c color  P camera  wfwd a<-left d-right-> s<-back x stop  []speed  q quit'
         )
 
 
