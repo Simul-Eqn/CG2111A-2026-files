@@ -1,5 +1,6 @@
 PORT = 12346
 
+DISPLAY_SIZE = (192*5, 108*5) 
 
 import cv2
 import numpy as np
@@ -35,7 +36,9 @@ async def handle_client(reader, writer):
 
             img = np.frombuffer(img_data, dtype=np.uint8).reshape((img_height, img_width))
 
-            cv2.imshow(window_name, img)
+            display_img = cv2.resize(img, DISPLAY_SIZE, interpolation=cv2.INTER_LINEAR)
+
+            cv2.imshow(window_name, display_img)
             cv2.waitKey(1)
 
             
