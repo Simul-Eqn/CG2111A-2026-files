@@ -82,7 +82,6 @@ class ProcessSharedState:
     def set_status(self, msg: str):
         """Write a status string (truncated to 127 bytes)."""
         self.status_note.value = msg.encode('utf-8')[:127]
-        _client_log("STATUS: "+msg)
 
     def get_status(self) -> str:
         """Read the current status string."""

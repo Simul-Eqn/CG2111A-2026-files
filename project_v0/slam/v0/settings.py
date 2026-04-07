@@ -136,3 +136,30 @@ ZOOM_HALF_M = [
     MAP_SIZE_METERS / 5.0,
     MAP_SIZE_METERS / 8.0,
 ]
+
+# ===========================================================================
+# ARM relay settings (for arm_terminal.py)
+# ===========================================================================
+
+# Default IP address of the robot API server.
+# Used when SLAM_SERVER_IP environment variable is not set.
+# This should be the IP of the machine running rp_lidar_api.py or slam.py.
+# Common values:
+#   'localhost'      - API server on same machine (Raspberry Pi)
+#   '100.71.68.106'  - Tailscale IP (example)
+#   '192.168.1.100'  - Local network IP (example)
+ARM_SERVER_IP_DEFAULT = '100.71.68.106'
+
+# Default port for the robot API server.
+# The rp_lidar_api.py server typically listens on this port.
+ARM_SERVER_PORT_DEFAULT = 9999
+
+# Port the ARM relay listens on for arm_terminal.py connections.
+# This should not conflict with other services.
+ARM_RELAY_PORT_DEFAULT = 65433
+
+# Timeout in seconds to wait for arm_terminal.py to connect to the relay.
+# If the arm terminal doesn't connect within this time, the relay continues
+# without it (the arm terminal can connect later).
+ARM_TERM_TIMEOUT_DEFAULT = 30
+

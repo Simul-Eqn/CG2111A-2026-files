@@ -1,0 +1,1 @@
+"""Second terminal relay package."""

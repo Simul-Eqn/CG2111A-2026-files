@@ -5,8 +5,10 @@
 # server is the raspberry pi 
 import os
 
-server_IP = os.getenv('MPSV0_SERVER_IP', '100.109.145.53')
-server_lidar_port = int(os.getenv('MPSV0_SERVER_PORT', '12345'))
+# Backward-compatible env var handling:
+# prefer MPSV0_* for this project, but accept SLAM_* aliases too.
+server_IP = os.getenv('MPSV0_SERVER_IP', os.getenv('SLAM_SERVER_IP', '100.71.68.106'))
+server_lidar_port = int(os.getenv('MPSV0_SERVER_PORT', os.getenv('SLAM_LIDAR_PORT', '12345')))
 
 
 # command types 

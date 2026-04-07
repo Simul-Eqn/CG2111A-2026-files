@@ -23,6 +23,15 @@ from shared_state import ProcessSharedState
 from slam_process import run_slam_process
 import lidar
 
+try:
+    import second_terminal_manager as second_term
+    _second_term_available = True
+except ImportError:
+    _second_term_available = False
+
+
+CAMERA_CAPTURE_LIMIT_UI = 10
+
 
 class SlamCustomUI:
     def __init__(self):
@@ -64,7 +73,6 @@ class SlamCustomUI:
         self._green_scatter = None
         self._blue_scatter = None
         self._info_text = None
-        self._arm_box = None
         self._timer = None
 
     def _snapshot(self):
@@ -290,10 +298,17 @@ class SlamCustomUI:
             return
 
         if key == 'f':
+            if self._camera_count >= CAMERA_CAPTURE_LIMIT_UI:
+                self._status_msg = f'[CAMERA] limit reached ({CAMERA_CAPTURE_LIMIT_UI})'
+                return
             ok = lidar.sensor_camera_capture()
             if ok:
                 self._camera_count += 1
-            self._status_msg = '[CAMERA] captured' if ok else '[CAMERA] failed'
+                self._status_msg = (
+                    f'[CAMERA] captured ({self._camera_count}/{CAMERA_CAPTURE_LIMIT_UI})'
+                )
+            else:
+                self._status_msg = '[CAMERA] failed'
             return
 
         if key == 'c':
@@ -340,20 +355,13 @@ class SlamCustomUI:
             self._status_msg = f'[SPEED] {self._motor_speed}' if ok else '[SPEED] failed'
             return
 
-    def _handle_arm_submit(self, text):
-        cmd = (text or '').strip().upper()
-        if not cmd:
-            self._status_msg = '[ARM] empty command'
-            return
-        ok = lidar.sensor_arm_text(cmd)
-        self._status_msg = f'[ARM] {cmd} sent' if ok else f'[ARM] {cmd} failed'
-        try:
-            # Clear field after submit for faster repeated entries.
-            self._arm_box.set_val('')
-        except Exception:
-            pass
-
     def _refresh(self):
+        if _second_term_available:
+            try:
+                second_term.pump()
+            except Exception:
+                pass
+
         snap = self._snapshot()
 
         if snap['map_version'] != self._last_map_version:
@@ -405,17 +413,13 @@ class SlamCustomUI:
 
         info = (
             f"State: {state}\n"
-            f"Pose: x={snap['x_mm']:.0f} mm  y={snap['y_mm']:.0f} mm  th={snap['theta_deg']:+.1f} deg\n"
-            f"Rounds: {snap['rounds_seen']}  Valid points: {snap['valid_points']}\n"
-            f"View: zoom {self._zoom_idx + 1}/{len(self._zoom_levels_px)}  center=({self._view_center_x:.0f}, {self._view_center_y:.0f}) px\n"
-            f"View rotation: {self._display_rotation_deg:+.1f} deg (O wall re-zero, J/L nudge, H home)\n"
-            f"Camera captures: {self._camera_count}\n"
-            f"Color dots: R={len(self._red_points)} G={len(self._green_points)} B={len(self._blue_points)}\n"
-            f"SLAM: {snap['status_note']}\n"
-            f"Action: {self._status_msg}\n\n"
-            f"Keys: WASD move, X stop, [] speed, C color, F camera, E estop, P pause\n"
-            f"View keys: Arrows pan, I zoom in, K zoom out, O wall re-zero, J/L align nudge, H home, Q quit\n"
-            f"Arm: type X000 in box (B090/S110/E080/G095/V020 or H)"
+            f"Pose: x={snap['x_mm']:.0f} y={snap['y_mm']:.0f} th={snap['theta_deg']:+.1f} deg | "
+            f"Rounds={snap['rounds_seen']} Valid={snap['valid_points']}\n"
+            f"View: z{self._zoom_idx + 1}/{len(self._zoom_levels_px)} "
+            f"ctr=({self._view_center_x:.0f},{self._view_center_y:.0f}) rot={self._display_rotation_deg:+.1f} deg\n"
+            f"Camera={self._camera_count} Colors(R/G/B)={len(self._red_points)}/{len(self._green_points)}/{len(self._blue_points)}\n"
+            f"Action: {self._status_msg}\n"
+            f"Keys: WASD/X [] C F E P | Arrows I K O J L H Q | 2nd terminal: second_terminal/second_terminal.py"
         )
         if snap['error_message']:
             info += f"\nError: {snap['error_message']}"
@@ -428,6 +432,21 @@ class SlamCustomUI:
             if self._timer is not None:
                 self._timer.stop()
         except Exception:
+            pass
+        try:
+            if _second_term_available:
+                second_term.shutdown()
+        except Exception:
+            pass
+        try:
+            self.pss.stop_event.set()
+            if self.slam_proc.is_alive():
+                self.slam_proc.join(timeout=3.0)
+            if self.slam_proc.is_alive():
+                self.slam_proc.terminate()
+            self.pss.cleanup()
+        except Exception:
+            pass
             pass
 
         try:
@@ -451,7 +470,6 @@ class SlamCustomUI:
     def run(self):
         try:
             import matplotlib.pyplot as plt
-            from matplotlib.widgets import TextBox
         except ImportError:
             print('[slam] ERROR: matplotlib is not installed.')
             print('Install it in your environment, then run slam.py again.')
@@ -469,13 +487,12 @@ class SlamCustomUI:
             # SLAM map should still run even if sensor API side is unavailable.
             self._status_msg = 'sensor serial connect failed (map still running)'
 
-        self._fig = plt.figure(figsize=(12, 10))
+        self._fig = plt.figure(figsize=(9, 10))
         self._fig.canvas.manager.set_window_title('SLAM Custom UI')
-        gs = self._fig.add_gridspec(3, 1, height_ratios=[18, 5, 2])
+        gs = self._fig.add_gridspec(2, 1, height_ratios=[18, 5])
 
         self._ax_map = self._fig.add_subplot(gs[0, 0])
         self._ax_info = self._fig.add_subplot(gs[1, 0])
-        ax_arm = self._fig.add_subplot(gs[2, 0])
 
         self._ax_map.set_title('Occupancy Map')
         self._ax_map.set_xlim(MAP_SIZE_PIXELS - 1, 0)
@@ -496,10 +513,6 @@ class SlamCustomUI:
         self._ax_info.axis('off')
         self._info_text = self._ax_info.text(0.0, 1.0, '', va='top', family='monospace', fontsize=9)
 
-        ax_arm.set_title('Robot Arm Command (X000 format)', fontsize=10)
-        self._arm_box = TextBox(ax_arm, 'Arm Cmd: ', initial='')
-        self._arm_box.on_submit(self._handle_arm_submit)
-
         self._fig.canvas.mpl_connect('key_press_event', self._handle_key)
         self._fig.canvas.mpl_connect('close_event', lambda evt: self._shutdown())
 
@@ -509,7 +522,13 @@ class SlamCustomUI:
 
         self._apply_view_window()
         self._refresh()
-        plt.tight_layout()
+        # Keep a stable layout: tight_layout can occasionally over-compress
+        # the map axis when info text changes or the window is resized.
+        self._fig.subplots_adjust(left=0.05, right=0.98, top=0.95, bottom=0.05, hspace=0.10)
+        
+        if _second_term_available:
+            second_term.start()
+        
         plt.show()
 
 

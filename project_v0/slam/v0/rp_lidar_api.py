@@ -109,7 +109,8 @@ def disconnect(lidar):
 _arduino_ser = None
 _estop_state = STATE_RUNNING
 _camera_connected = False
-_frames_remaining = 5
+CAMERA_CAPTURE_LIMIT = 10
+_frames_remaining = CAMERA_CAPTURE_LIMIT
 _motor_speed = 150
 
 
@@ -432,6 +433,8 @@ async def handle_client(reader, writer):
                     baudrate = struct.unpack('i', baud_data)[0]
 
                 ok = _open_arduino_serial(port=port, baudrate=baudrate)
+                #if ok:
+                #    _frames_remaining = CAMERA_CAPTURE_LIMIT
                 writer.write(struct.pack('b', 1 if ok else 0))
                 await writer.drain()
 

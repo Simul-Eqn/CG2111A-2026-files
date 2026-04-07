@@ -1,0 +1,1 @@
+"""Arm terminal relay module."""
