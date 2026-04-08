@@ -46,7 +46,7 @@ class SimState:
     x_mm: float = 3000.0
     y_mm: float = 3000.0
     theta_deg: float = 0.0
-    motor_speed: int = 150
+    motor_speed: int = 90
     estop_state: int = STATE_RUNNING
     camera_captures: int = 0
     drive_mode: str = 'STOP'
@@ -260,8 +260,8 @@ def _advance_pose():
     if dt <= 0:
         return
 
-    v_mm_s = float(STATE.motor_speed) * 4.0
-    w_deg_s = 10.0
+    v_mm_s = float(STATE.motor_speed) * 1.0
+    w_deg_s = 15.0
 
     if STATE.drive_mode == 'FORWARD':
         theta = math.radians(STATE.theta_deg)

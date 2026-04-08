@@ -32,6 +32,8 @@ except ImportError:
 
 CAMERA_CAPTURE_LIMIT_UI = 10
 MAP_BYTES_SIZE = MAP_SIZE_PIXELS * MAP_SIZE_PIXELS
+MIN_VIEW_SPAN_PX = 2.0
+MIN_AXES_BOX_PX = 5.0
 
 
 class SlamCustomUI:
@@ -207,18 +209,44 @@ class SlamCustomUI:
 
     def _clamp_view_center(self):
         n = MAP_SIZE_PIXELS - 1
-        half = self._zoom_levels_px[self._zoom_idx]
+        half = max(float(self._zoom_levels_px[self._zoom_idx]), MIN_VIEW_SPAN_PX / 2.0)
         self._view_center_x = max(half, min(n - half, self._view_center_x))
         self._view_center_y = max(half, min(n - half, self._view_center_y))
 
     def _apply_view_window(self):
         self._clamp_view_center()
-        half = self._zoom_levels_px[self._zoom_idx]
+        half = max(float(self._zoom_levels_px[self._zoom_idx]), MIN_VIEW_SPAN_PX / 2.0)
         cx = self._view_center_x
         cy = self._view_center_y
         # Keep x-axis mirrored as requested earlier.
         self._ax_map.set_xlim(cx + half, cx - half)
         self._ax_map.set_ylim(cy + half, cy - half)
+
+    def _view_box_collapsed(self) -> bool:
+        if self._fig is None or self._ax_map is None:
+            return False
+
+        try:
+            x0, x1 = self._ax_map.get_xlim()
+            y0, y1 = self._ax_map.get_ylim()
+        except Exception:
+            return True
+
+        spans = (abs(float(x1) - float(x0)), abs(float(y1) - float(y0)))
+        if any((not math.isfinite(span)) or span < MIN_VIEW_SPAN_PX for span in spans):
+            return True
+
+        canvas = getattr(self._fig, 'canvas', None)
+        if canvas is None:
+            return False
+
+        try:
+            renderer = canvas.get_renderer()
+            bbox = self._ax_map.get_window_extent(renderer=renderer)
+        except Exception:
+            return False
+
+        return bbox.width < MIN_AXES_BOX_PX or bbox.height < MIN_AXES_BOX_PX
 
     def _pan_view(self, dx_px: float, dy_px: float):
         self._view_center_x += dx_px
@@ -399,6 +427,10 @@ class SlamCustomUI:
             except Exception:
                 pass
 
+        if self._view_box_collapsed():
+            self._status_msg = '[VIEW] collapsed view recovered'
+            self._go_home_view()
+
         snap = self._snapshot()
 
         if snap['map_version'] != self._last_map_version:
@@ -529,7 +561,8 @@ class SlamCustomUI:
         self._ax_map.set_title('Occupancy Map')
         self._ax_map.set_xlim(MAP_SIZE_PIXELS - 1, 0)
         self._ax_map.set_ylim(MAP_SIZE_PIXELS - 1, 0)
-        self._ax_map.set_aspect('equal', adjustable='box')
+        self._ax_map.set_aspect('equal', adjustable='datalim')
+        self._ax_map.set_autoscale_on(False)
 
         init_img = np.full((MAP_SIZE_PIXELS, MAP_SIZE_PIXELS), 127, dtype=np.uint8)
         self._img_artist = self._ax_map.imshow(init_img, cmap='gray', vmin=0, vmax=255, origin='upper')
