@@ -372,6 +372,10 @@ def _print_arm_state(prefix="[sim] ARM"):
 
 
 def _handle_arm_command(command, value=None):
+    if STATE.estop_state == STATE_STOPPED:
+        print('[sim] ARM command rejected: E-STOP active')
+        return False
+
     if command == COMMAND_ARM_BASE and value is not None:
         STATE.arm_base = int(_clamp(value, ARM_BASE_MIN, ARM_BASE_MAX))
         print(f"[sim] ARM base -> {STATE.arm_base}")
@@ -657,9 +661,15 @@ async def handle_client(reader, writer):
 
             elif command == net_params.CMD_SENSOR_ESTOP:
                 STATE.estop_state = STATE_STOPPED if STATE.estop_state == STATE_RUNNING else STATE_RUNNING
+                if STATE.estop_state == STATE_STOPPED:
+                    # E-stop latches the simulator into an immediate no-motion state.
+                    STATE.drive_mode = 'STOP'
                 _send_bool(writer, True)
                 await writer.drain()
-                print(f"[sim] E-STOP toggled -> {'STOPPED' if STATE.estop_state == STATE_STOPPED else 'RUNNING'}")
+                if STATE.estop_state == STATE_STOPPED:
+                    print('[sim] E-STOP toggled -> STOPPED (drive halted, arm movement blocked)')
+                else:
+                    print('[sim] E-STOP toggled -> RUNNING')
 
             elif command == net_params.CMD_SENSOR_GET_STATUS:
                 writer.write(struct.pack('<bi', 1, int(STATE.estop_state)))
@@ -703,6 +713,11 @@ async def handle_client(reader, writer):
             elif command == net_params.CMD_SENSOR_ARM_TEXT:
                 cmd_len = struct.unpack('i', await reader.readexactly(4))[0]
                 text_cmd = (await reader.readexactly(cmd_len)).decode('utf-8', errors='replace')
+                if STATE.estop_state == STATE_STOPPED:
+                    _send_bool(writer, False)
+                    await writer.drain()
+                    print('[sim] ARM text command rejected: E-STOP active')
+                    continue
                 parsed = _parse_arm_text_command(text_cmd)
                 if parsed is None:
                     _send_bool(writer, False)
@@ -723,6 +738,11 @@ async def handle_client(reader, writer):
                 COMMAND_ARM_HOME,
                 COMMAND_ARM_SET_SPEED,
             }:
+                if STATE.estop_state == STATE_STOPPED:
+                    _send_bool(writer, False)
+                    await writer.drain()
+                    print('[sim] ARM packet command rejected: E-STOP active')
+                    continue
                 value = None
                 if command != COMMAND_ARM_HOME:
                     value = struct.unpack('i', await reader.readexactly(4))[0]
