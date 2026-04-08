@@ -32,17 +32,19 @@ export SECOND_TERM_HOST=192.168.1.100      # Where second_terminal connects
 
 ```python reference_rp_lidar_api_sim.py``` 
 
-Or with custom IP:
+Or with custom IP: (this is the IP address of the camera receiver)
 ```bash
 set SLAM_SERVER_IP=127.0.0.1
 python reference_rp_lidar_api_sim.py
 ```
 
+
+
 ### Main terminal setup 
 
 ```python slam.py``` 
 
-Or with custom API server:
+Or with custom API server: (this is the raspberrypi's ip address)
 ```bash
 set MPSV0_SERVER_IP=127.0.0.1
 python slam.py

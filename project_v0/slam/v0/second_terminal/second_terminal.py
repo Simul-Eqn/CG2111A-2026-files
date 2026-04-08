@@ -6,6 +6,7 @@ import ssl
 import struct
 import sys
 import threading
+import time
 from pathlib import Path
 
 from net_utils import TCPClient, sendTPacketFrame, recvTPacketFrame
@@ -17,6 +18,8 @@ PI_HOST = os.getenv('SECOND_TERM_HOST', os.getenv('ARM_RELAY_HOST', 'localhost')
 PI_PORT = int(os.getenv('SECOND_TERM_PORT', '65432'))
 TLS_ENABLED = os.getenv('TLS_ENABLED', 'True').lower() in ('true', '1', 'yes')
 TLS_CERT_PATH = Path(__file__).parent.parent / 'certs' / 'server.crt'
+CONNECT_RETRIES = int(os.getenv('SECOND_TERM_CONNECT_RETRIES', '20'))
+CONNECT_RETRY_DELAY_SEC = float(os.getenv('SECOND_TERM_CONNECT_RETRY_DELAY_SEC', '1.0'))
 
 _shutdown = threading.Event()
 
@@ -97,8 +100,21 @@ def run():
     _shutdown.clear()
     client = TCPClient(PI_HOST, PI_PORT, ssl_context=_make_ssl_ctx(), server_hostname=PI_HOST)
     print(f'[second_terminal] connecting to relay at {PI_HOST}:{PI_PORT}...')
-    if not client.connect():
-        print('[second_terminal] failed to connect')
+
+    connected = False
+    for attempt in range(1, max(1, CONNECT_RETRIES) + 1):
+        if client.connect():
+            connected = True
+            break
+        if attempt < CONNECT_RETRIES:
+            print(
+                f'[second_terminal] connect failed (attempt {attempt}/{CONNECT_RETRIES}); '
+                f'retrying in {CONNECT_RETRY_DELAY_SEC:.1f}s...'
+            )
+            time.sleep(CONNECT_RETRY_DELAY_SEC)
+
+    if not connected:
+        print('[second_terminal] failed to connect after retries')
         return
 
     print('[second_terminal] connected')

@@ -74,6 +74,7 @@ class SlamCustomUI:
         self._blue_scatter = None
         self._info_text = None
         self._timer = None
+        self._is_shutting_down = False
 
     def _snapshot(self):
         error = self.pss.get_error()
@@ -428,6 +429,10 @@ class SlamCustomUI:
         self._fig.canvas.draw_idle()
 
     def _shutdown(self):
+        if self._is_shutting_down:
+            return
+        self._is_shutting_down = True
+
         try:
             if self._timer is not None:
                 self._timer.stop()
@@ -447,23 +452,9 @@ class SlamCustomUI:
             self.pss.cleanup()
         except Exception:
             pass
-            pass
 
         try:
             lidar.sensor_serial_disconnect()
-        except Exception:
-            pass
-
-        self.pss.stop_event.set()
-        if self.slam_proc.is_alive():
-            self.slam_proc.join(timeout=3.0)
-        if self.slam_proc.is_alive():
-            self.slam_proc.terminate()
-        self.pss.cleanup()
-
-        try:
-            import matplotlib.pyplot as plt
-            plt.close('all')
         except Exception:
             pass
 
@@ -479,6 +470,11 @@ class SlamCustomUI:
         # for robot control in this UI window.
         plt.rcParams['keymap.save'] = []
         plt.rcParams['keymap.fullscreen'] = []
+
+        # Start second terminal relay first so remote clients can connect
+        # even while LIDAR/API initialization is still in progress.
+        if _second_term_available:
+            second_term.start()
 
         self.slam_proc.start()
         try:
@@ -525,9 +521,6 @@ class SlamCustomUI:
         # Keep a stable layout: tight_layout can occasionally over-compress
         # the map axis when info text changes or the window is resized.
         self._fig.subplots_adjust(left=0.05, right=0.98, top=0.95, bottom=0.05, hspace=0.10)
-        
-        if _second_term_available:
-            second_term.start()
         
         plt.show()
 
