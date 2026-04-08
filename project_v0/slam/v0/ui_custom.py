@@ -34,6 +34,7 @@ CAMERA_CAPTURE_LIMIT_UI = 10
 MAP_BYTES_SIZE = MAP_SIZE_PIXELS * MAP_SIZE_PIXELS
 MIN_VIEW_SPAN_PX = 2.0
 MIN_AXES_BOX_PX = 5.0
+VIEW_HEALTH_CHECK_INTERVAL_SEC = 1.0
 
 
 class SlamCustomUI:
@@ -78,6 +79,7 @@ class SlamCustomUI:
         self._info_text = None
         self._timer = None
         self._is_shutting_down = False
+        self._next_view_health_check = 0.0
 
     def _snapshot(self):
         if self._is_shutting_down:
@@ -271,6 +273,7 @@ class SlamCustomUI:
         self._zoom_idx = 1
         self._display_rotation_deg = 0.0
         self._last_rotation_deg = None
+        self._next_view_health_check = 0.0
         self._apply_view_window()
         self._status_msg = '[VIEW] home'
 
@@ -427,9 +430,12 @@ class SlamCustomUI:
             except Exception:
                 pass
 
-        if self._view_box_collapsed():
-            self._status_msg = '[VIEW] collapsed view recovered'
-            self._go_home_view()
+        now = time.monotonic()
+        if now >= self._next_view_health_check:
+            self._next_view_health_check = now + VIEW_HEALTH_CHECK_INTERVAL_SEC
+            if self._view_box_collapsed():
+                self._status_msg = '[VIEW] collapsed view recovered'
+                self._go_home_view()
 
         snap = self._snapshot()
 

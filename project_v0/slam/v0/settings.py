@@ -104,7 +104,7 @@ INITIAL_ROUNDS_SKIP = 5
 
 # How many times per second the terminal map refreshes.
 # Lower values reduce CPU load; higher values give a smoother display.
-UI_REFRESH_HZ = 2
+UI_REFRESH_HZ = 4
 
 # Maximum width and height of the rendered map in terminal cells.
 # Reduce these if the display is too slow on your terminal emulator.
