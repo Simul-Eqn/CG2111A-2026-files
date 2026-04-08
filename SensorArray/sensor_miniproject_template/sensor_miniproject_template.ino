@@ -250,6 +250,18 @@ static void handleArmCommand(const TPacket *cmd) {
 
 volatile TState buttonState = STATE_RUNNING;
 volatile bool   stateChanged = false;
+volatile bool   motorShutdownRequested = false;
+
+static TState readButtonState() {
+    cli();
+    TState state = buttonState;
+    sei();
+    return state;
+}
+
+static void requestMotorShutdown() {
+    motorShutdownRequested = true;
+}
 
 /*
  * TODO (Activity 1): Implement the E-Stop ISR.
@@ -273,6 +285,7 @@ volatile bool   stateChanged = false;
       if(state && buttonState == STATE_RUNNING && currentStatus == true) {
         buttonState = STATE_STOPPED;
         stateChanged = true;
+        requestMotorShutdown();
       }
       else if (!state && buttonState == STATE_STOPPED && currentStatus == true) {
         currentStatus = false;
@@ -447,6 +460,35 @@ void ccw(int speed)      { move(speed, CCW); }
 void cw(int speed)       { move(speed, CW); }
 void stop()              { move(0, STOP); }
 
+static void haltArmMotion() {
+  for (uint8_t i = 0; i < ARM_JOINT_COUNT; i++) {
+    armTarget[i] = armPos[i];
+  }
+}
+
+static void stopAllMotionNow() {
+  stop();
+  haltArmMotion();
+  motorShutdownRequested = false;
+}
+
+static bool commandIsBlockedWhenStopped(uint8_t command) {
+  switch (command) {
+    case COMMAND_FORWARD:
+    case COMMAND_BACKWARD:
+    case COMMAND_LEFT:
+    case COMMAND_RIGHT:
+    case COMMAND_ARM_BASE:
+    case COMMAND_ARM_SHOULDER:
+    case COMMAND_ARM_ELBOW:
+    case COMMAND_ARM_GRIPPER:
+    case COMMAND_ARM_HOME:
+      return true;
+    default:
+      return false;
+  }
+}
+
 
 // =============================================================
 // Command handler
@@ -465,16 +507,27 @@ void stop()              { move(0, STOP); }
 static void handleCommand(const TPacket *cmd) {
     if (cmd->packetType != PACKET_TYPE_COMMAND) return;
 
+    if (readButtonState() == STATE_STOPPED && commandIsBlockedWhenStopped(cmd->command)) {
+        requestMotorShutdown();
+        stopAllMotionNow();
+        sendStatus(STATE_STOPPED);
+        sendMotorStatus(motorSpeed);
+        sendArmStatus();
+        return;
+    }
+
     switch (cmd->command) {
         case COMMAND_ESTOP:
             cli();
             buttonState  = STATE_STOPPED;
             stateChanged = false;
             sei();
-      sendOk();
+            requestMotorShutdown();
+            stopAllMotionNow();
+            sendOk();
             sendStatus(STATE_STOPPED);
-            stop();
             sendMotorStatus(motorSpeed);
+            sendArmStatus();
             break;
 
         case COMMAND_COLOR_SENSOR: {
@@ -514,8 +567,9 @@ static void handleCommand(const TPacket *cmd) {
             break;
 
         case COMMAND_STOP:
-            stop();
+            stopAllMotionNow();
             sendMotorStatus(motorSpeed);
+            sendArmStatus();
             break;
 
         case COMMAND_SET_SPEED: {
@@ -602,6 +656,10 @@ ISR(TIMER2_COMPA_vect) { // this'll automatically reset timer2
 }
 
 void loop() {
+    if (motorShutdownRequested) {
+        stopAllMotionNow();
+    }
+
     armUpdateMotion();
 
     // --- 1. Report any E-Stop state change to the Pi ---
