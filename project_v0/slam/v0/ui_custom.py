@@ -510,7 +510,7 @@ class SlamCustomUI:
         self._info_text = self._ax_info.text(0.0, 1.0, '', va='top', family='monospace', fontsize=9)
 
         self._fig.canvas.mpl_connect('key_press_event', self._handle_key)
-        self._fig.canvas.mpl_connect('close_event', lambda evt: self._shutdown())
+        self._fig.canvas.mpl_connect('close_event', lambda evt: None)
 
         self._timer = self._fig.canvas.new_timer(interval=max(20, int(1000 / UI_REFRESH_HZ)))
         self._timer.add_callback(self._refresh)
@@ -521,8 +521,11 @@ class SlamCustomUI:
         # Keep a stable layout: tight_layout can occasionally over-compress
         # the map axis when info text changes or the window is resized.
         self._fig.subplots_adjust(left=0.05, right=0.98, top=0.95, bottom=0.05, hspace=0.10)
-        
-        plt.show()
+
+        try:
+            plt.show()
+        finally:
+            self._shutdown()
 
 
 def run() -> None:
