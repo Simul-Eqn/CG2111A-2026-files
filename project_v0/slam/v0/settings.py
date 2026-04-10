@@ -81,7 +81,7 @@ MAX_DISTANCE_MM = 12000
 # measure the CCW angle from the robot's forward to the LIDAR's forward.
 #
 # The default of 0 assumes the LIDAR's forward direction matches the robot's.
-LIDAR_OFFSET_DEG = 0
+LIDAR_OFFSET_DEG = 180
 
 # Sign used when converting raw scan angles into BreezySLAM's CCW convention.
 # Default -1 assumes raw angles increase clockwise (RPLidar default).

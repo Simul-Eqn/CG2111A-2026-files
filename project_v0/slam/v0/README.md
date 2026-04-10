@@ -38,6 +38,12 @@ set SLAM_SERVER_IP=127.0.0.1
 python reference_rp_lidar_api_sim.py
 ```
 
+### Real Robot 
+```
+source ./../../../SensorArray/env/bin/activate
+SET SLAM_SERVER_IP=[camera receiver ip address]
+python rp_lidar_api.py
+```
 
 
 ### Main terminal setup 

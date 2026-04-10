@@ -260,8 +260,8 @@ def _advance_pose():
     if dt <= 0:
         return
 
-    v_mm_s = float(STATE.motor_speed) * 1.0
-    w_deg_s = 15.0
+    v_mm_s = float(STATE.motor_speed) * 4.0
+    w_deg_s = 25.0
 
     if STATE.drive_mode == 'FORWARD':
         theta = math.radians(STATE.theta_deg)
