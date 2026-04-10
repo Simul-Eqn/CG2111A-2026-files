@@ -84,7 +84,7 @@ def scan_rounds(lidar, mode):
     """
     buff = []
     started = False
-    for meas in lidar.start_scan_express(mode)():
+    for meas in lidar.start_scan_express()():#mode)():
         if meas.start_flag:
             # A start_flag marks the beginning of a new rotation.
             # Yield the completed buffer from the previous rotation.
