@@ -80,5 +80,12 @@ If second terminal disconnects, you can reconnect by rerunning the command above
 ```python camera_receiver_server.py``` 
 
 
+## Cartographer variation
+
+For the alternative mapping setup, see `cartographer_variant/README.md`.
+
+
 
 MOVEMENT MOTOR SPEED: 130 is good 
+
+If jumping aound: either increase MIN_VALID or decrease MAX_TRANSLATION or something 
