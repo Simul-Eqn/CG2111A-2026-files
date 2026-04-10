@@ -7,9 +7,6 @@ _LOG_FILE = Path(__file__).with_name("lidar_client.log")
 
 
 def _client_log(message: str) -> None:
-    pass
-
-
     """Write client logs to stderr and a file so Textual UI does not hide them."""
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     line = f"[{timestamp}] {message}"

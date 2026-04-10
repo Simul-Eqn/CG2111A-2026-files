@@ -84,7 +84,16 @@ def scan_rounds(lidar, mode):
     """
     buff = []
     started = False
-    for meas in lidar.start_scan()():#mode)():
+    try:
+        scan_iter = lidar.start_scan_express(mode)()
+    except Exception as exc:
+        print(
+            f"[lidar] Express scan mode {mode} unavailable, "
+            f"falling back to standard scan: {exc}"
+        )
+        scan_iter = lidar.start_scan()()
+
+    for meas in scan_iter:
         if meas.start_flag:
             # A start_flag marks the beginning of a new rotation.
             # Yield the completed buffer from the previous rotation.

@@ -90,8 +90,9 @@ LIDAR_OFFSET_DEG = 180
 
 # Sign used when converting raw scan angles into BreezySLAM's CCW convention.
 # Default -1 assumes raw angles increase clockwise (RPLidar default).
+# The bundled simulator follows that same clockwise convention.
 # Set to +1 if your angle source is already CCW.
-LIDAR_ANGLE_SIGN = +1
+LIDAR_ANGLE_SIGN = -1
 
 # ===========================================================================
 # Scan quality thresholds
@@ -101,7 +102,7 @@ LIDAR_ANGLE_SIGN = +1
 # a full SLAM update.  If a scan has fewer valid points we reuse the previous
 # good scan instead.  Increase this if the map is noisy; decrease it if the
 # robot is in a sparse environment.
-MIN_VALID_POINTS = 10
+MIN_VALID_POINTS = 80
 
 # Number of scans to skip at startup.  The LIDAR motor needs a few rotations
 # to reach full speed; early scans are noisier than steady-state scans.
@@ -170,4 +171,3 @@ ARM_RELAY_PORT_DEFAULT = 65433
 # If the arm terminal doesn't connect within this time, the relay continues
 # without it (the arm terminal can connect later).
 ARM_TERM_TIMEOUT_DEFAULT = 30
-

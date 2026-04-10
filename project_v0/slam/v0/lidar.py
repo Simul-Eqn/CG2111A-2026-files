@@ -30,6 +30,8 @@ from packets import (
 
 ARDUINO_PORT = '/dev/ttyACM0'
 ARDUINO_BAUD = 9600
+SERVER_OPEN_TIMEOUT_SEC = 3.0
+SERVER_RESPONSE_TIMEOUT_SEC = 5.0
 
 # Global connection state and event loop
 _reader = None
@@ -79,15 +81,53 @@ async def _ensure_connection():
     global _reader, _writer, _connected
     if not _connected:
         try:
-            _reader, _writer = await asyncio.open_connection(
-                net_params.server_IP, net_params.server_lidar_port)
+            _reader, _writer = await asyncio.wait_for(
+                asyncio.open_connection(
+                    net_params.server_IP,
+                    net_params.server_lidar_port,
+                ),
+                timeout=SERVER_OPEN_TIMEOUT_SEC,
+            )
             _connected = True
             _client_log(
                 f"Connected to LIDAR server at {net_params.server_IP}:{net_params.server_lidar_port}"
             )
         except Exception as e:
+            await _reset_connection()
             _client_log(f"Failed to connect to LIDAR server: {e}")
             raise
+
+
+async def _reset_connection():
+    """Drop the current TCP connection so the next command reconnects cleanly."""
+    global _reader, _writer, _connected
+    writer = _writer
+    _reader = None
+    _writer = None
+    _connected = False
+    if writer is not None:
+        writer.close()
+        try:
+            await writer.wait_closed()
+        except Exception:
+            pass
+
+
+async def _readexactly(num_bytes, *, context, timeout_sec=SERVER_RESPONSE_TIMEOUT_SEC):
+    """Read a fixed-size server response with a finite timeout."""
+    try:
+        return await asyncio.wait_for(
+            _reader.readexactly(num_bytes),
+            timeout=timeout_sec,
+        )
+    except asyncio.TimeoutError as exc:
+        await _reset_connection()
+        raise TimeoutError(
+            f"Timed out waiting for {context} after {timeout_sec:.1f}s"
+        ) from exc
+    except Exception:
+        await _reset_connection()
+        raise
 
 
 async def _send_command(command, *args):
@@ -108,7 +148,11 @@ async def _send_command(command, *args):
             _writer.write(struct.pack('i', len(encoded)))
             _writer.write(encoded)
     
-    await _writer.drain()
+    try:
+        await _writer.drain()
+    except Exception:
+        await _reset_connection()
+        raise
 
 
 async def _connect_async(port=LIDAR_PORT, baudrate=LIDAR_BAUD):
@@ -118,7 +162,7 @@ async def _connect_async(port=LIDAR_PORT, baudrate=LIDAR_BAUD):
         await _send_command(net_params.CMD_CONNECT, port, baudrate)
         
         # Read response: success flag (1 byte) + lidar_id (4 bytes)
-        response = await _reader.readexactly(5)
+        response = await _readexactly(5, context="CMD_CONNECT response")
         success = struct.unpack('<b', response[0:1])[0]
         lidar_id = struct.unpack('<i', response[1:5])[0]
         
@@ -128,6 +172,15 @@ async def _connect_async(port=LIDAR_PORT, baudrate=LIDAR_BAUD):
         else:
             _client_log(f'[lidar] Could not connect on port {port}')
             return None
+    except TimeoutError as e:
+        _client_log(
+            "[lidar] Timed out waiting for CMD_CONNECT response. "
+            "This usually means the Raspberry Pi is still running an older "
+            "rp_lidar_api.py or the server is wedged; redeploy the current "
+            "project_v0/slam/v0/rp_lidar_api.py and restart it."
+        )
+        _client_log(f"[lidar] Connection timeout detail: {e}")
+        return None
     except Exception as e:
         _client_log(f'[lidar] Connection error: {e}')
         return None
@@ -139,7 +192,7 @@ async def _get_scan_mode_async(lidar_id):
         await _send_command(net_params.CMD_GET_SCAN_MODE, lidar_id)
         
         # Read response: mode (4 bytes)
-        mode_data = await _reader.readexactly(4)
+        mode_data = await _readexactly(4, context="scan-mode response")
         mode = struct.unpack('i', mode_data)[0]
         
         if mode >= 0:
@@ -158,7 +211,7 @@ async def _start_scan_rounds_async(lidar_id, mode):
         await _send_command(net_params.CMD_START_SCAN_ROUNDS, lidar_id, mode)
         
         # Read response: success flag (1 byte)
-        response = await _reader.readexactly(1)
+        response = await _readexactly(1, context="start-scan response")
         success = struct.unpack('b', response)[0]
         
         return bool(success)
@@ -173,27 +226,27 @@ async def _get_next_scan_round_async(lidar_id):
         await _send_command(net_params.CMD_GET_NEXT_SCAN_ROUND, lidar_id)
         
         # Read response: has_data flag (1 byte)
-        has_data_data = await _reader.readexactly(1)
+        has_data_data = await _readexactly(1, context="scan-round availability flag")
         has_data = struct.unpack('b', has_data_data)[0]
         
         if not has_data:
             return None  # No more data
         
         # Read count (4 bytes)
-        count_data = await _reader.readexactly(4)
+        count_data = await _readexactly(4, context="scan-round count")
         count = struct.unpack('i', count_data)[0]
         
         # Read angles
         angles = []
         for _ in range(count):
-            angle_data = await _reader.readexactly(4)
+            angle_data = await _readexactly(4, context="scan-round angle value")
             angle = struct.unpack('f', angle_data)[0]
             angles.append(angle)
         
         # Read distances
         distances = []
         for _ in range(count):
-            distance_data = await _reader.readexactly(4)
+            distance_data = await _readexactly(4, context="scan-round distance value")
             distance = struct.unpack('f', distance_data)[0]
             distances.append(distance)
         
@@ -209,7 +262,7 @@ async def _disconnect_async(lidar_id):
         await _send_command(net_params.CMD_DISCONNECT, lidar_id)
         
         # Read response: success flag (1 byte)
-        response = await _reader.readexactly(1)
+        response = await _readexactly(1, context="disconnect response")
         success = struct.unpack('b', response)[0]
         
         if success:
@@ -223,7 +276,7 @@ async def _disconnect_async(lidar_id):
 async def _sensor_serial_connect_async(port=ARDUINO_PORT, baudrate=ARDUINO_BAUD):
     try:
         await _send_command(net_params.CMD_SENSOR_SERIAL_CONNECT, port, baudrate)
-        response = await _reader.readexactly(1)
+        response = await _readexactly(1, context="sensor-serial-connect response")
         return bool(struct.unpack('b', response)[0])
     except Exception as e:
         _client_log(f"[sensor] Serial connect failed: {e}")
@@ -233,7 +286,7 @@ async def _sensor_serial_connect_async(port=ARDUINO_PORT, baudrate=ARDUINO_BAUD)
 async def _sensor_serial_disconnect_async():
     try:
         await _send_command(net_params.CMD_SENSOR_SERIAL_DISCONNECT)
-        response = await _reader.readexactly(1)
+        response = await _readexactly(1, context="sensor-serial-disconnect response")
         return bool(struct.unpack('b', response)[0])
     except Exception as e:
         _client_log(f"[sensor] Serial disconnect failed: {e}")
@@ -243,7 +296,7 @@ async def _sensor_serial_disconnect_async():
 async def _sensor_estop_async():
     try:
         await _send_command(net_params.CMD_SENSOR_ESTOP)
-        response = await _reader.readexactly(1)
+        response = await _readexactly(1, context="sensor-estop response")
         return bool(struct.unpack('b', response)[0])
     except Exception as e:
         _client_log(f"[sensor] E-Stop failed: {e}")
@@ -253,7 +306,7 @@ async def _sensor_estop_async():
 async def _sensor_get_status_async():
     try:
         await _send_command(net_params.CMD_SENSOR_GET_STATUS)
-        response = await _reader.readexactly(5)
+        response = await _readexactly(5, context="sensor-status response")
         success = struct.unpack('<b', response[0:1])[0]
         state = struct.unpack('<i', response[1:5])[0]
         if not success:
@@ -267,7 +320,7 @@ async def _sensor_get_status_async():
 async def _sensor_get_color_async():
     try:
         await _send_command(net_params.CMD_SENSOR_GET_COLOR)
-        response = await _reader.readexactly(13)
+        response = await _readexactly(13, context="sensor-color response")
         success, r, g, b = struct.unpack('<biii', response)
         if not success:
             return None
@@ -280,7 +333,7 @@ async def _sensor_get_color_async():
 async def _sensor_drive_async(drive_cmd):
     try:
         await _send_command(net_params.CMD_SENSOR_DRIVE, drive_cmd)
-        response = await _reader.readexactly(1)
+        response = await _readexactly(1, context="sensor-drive response")
         return bool(struct.unpack('b', response)[0])
     except Exception as e:
         _client_log(f"[sensor] Drive command failed: {e}")
@@ -291,7 +344,7 @@ async def _sensor_set_speed_async(speed):
     try:
         speed = max(0, min(255, int(speed)))
         await _send_command(net_params.CMD_SENSOR_SET_SPEED, speed)
-        response = await _reader.readexactly(1)
+        response = await _readexactly(1, context="sensor-set-speed response")
         return bool(struct.unpack('b', response)[0])
     except Exception as e:
         _client_log(f"[sensor] Set speed failed: {e}")
@@ -301,7 +354,7 @@ async def _sensor_set_speed_async(speed):
 async def _sensor_camera_capture_async():
     try:
         await _send_command(net_params.CMD_SENSOR_CAMERA_CAPTURE)
-        response = await _reader.readexactly(1)
+        response = await _readexactly(1, context="sensor-camera response")
         return bool(struct.unpack('b', response)[0])
     except Exception as e:
         _client_log(f"[sensor] Camera capture failed: {e}")
@@ -311,7 +364,7 @@ async def _sensor_camera_capture_async():
 async def _sensor_arm_text_async(text_cmd):
     try:
         await _send_command(net_params.CMD_SENSOR_ARM_TEXT, str(text_cmd))
-        response = await _reader.readexactly(1)
+        response = await _readexactly(1, context="sensor-arm-text response")
         return bool(struct.unpack('b', response)[0])
     except Exception as e:
         _client_log(f"[sensor] Arm text command failed: {e}")
@@ -455,5 +508,4 @@ def sensor_arm_text(text_cmd):
     if not cmd[1:].isdigit():
         return False
     return _run_in_background_loop(_sensor_arm_text_async(cmd))
-
 
