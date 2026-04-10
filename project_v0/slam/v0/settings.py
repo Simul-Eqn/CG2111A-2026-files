@@ -32,7 +32,7 @@ MAP_SIZE_METERS = 8
 
 # How aggressively new LIDAR scans update the map (1 = slow, 10 = fast).
 # Lower values produce smoother maps; higher values react faster to changes.
-MAP_QUALITY = 5
+MAP_QUALITY = 3
 
 # Maximum gap (in mm) that BreezySLAM treats as a continuous wall.
 HOLE_WIDTH_MM = 100
@@ -45,7 +45,7 @@ HOLE_WIDTH_MM = 100
 SCAN_SIZE = 360
 
 # Approximate rotation rate of the RPLidar A1M8 in scans per second.
-SCAN_RATE_HZ = 2
+SCAN_RATE_HZ = 8
 
 # Wait time (seconds) after receiving one scan response before requesting
 # the next scan response from the API server.
