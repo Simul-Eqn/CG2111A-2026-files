@@ -23,7 +23,7 @@ import sys
 import select
 
 import camera_handler as CameraHandler  
-mport lidar_scanner as LidarScanner
+import lidar_scanner as LidarScanner
 from second_terminal import relay
 
 
