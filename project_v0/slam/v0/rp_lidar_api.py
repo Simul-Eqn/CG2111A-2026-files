@@ -83,6 +83,7 @@ def scan_rounds(lidar, mode):
     The generator runs until the LIDAR is disconnected or an exception is
     raised by the underlying PyRPlidar library.
     """
+    _debug_log(f"scan_rounds start api=start_scan mode={mode}")
     buff = []
     started = False
     round_index = 0
@@ -103,6 +104,12 @@ def scan_rounds(lidar, mode):
                         f"scan_round suspicious count={count} valid_nonzero={valid_nonzero} "
                         f"angle={one.angle:.2f} distance={one.distance:.2f} quality={getattr(one, 'quality', 'n/a')} "
                         f"mode={mode}"
+                    )
+                elif any((a < 0.0 or a > 360.0) for a in angles):
+                    outlier_angles = [a for a in angles if (a < 0.0 or a > 360.0)]
+                    _debug_log(
+                        f"scan_round angle_out_of_range idx={round_index} count={count} "
+                        f"outliers={len(outlier_angles)} first={outlier_angles[0]:.2f} mode={mode}"
                     )
                 elif round_index % SCAN_DEBUG_EVERY_N == 0:
                     min_d = min(distances)
