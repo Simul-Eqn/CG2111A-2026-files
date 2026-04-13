@@ -81,9 +81,9 @@ bool currentStatus = true;     //helper variable for INT5 ISR
 #define ARM_BASE_MIN      0
 #define ARM_BASE_MAX      180
 #define ARM_SHOULDER_MIN  80
-#define ARM_SHOULDER_MAX  120
+#define ARM_SHOULDER_MAX  130
 #define ARM_ELBOW_MIN     60
-#define ARM_ELBOW_MAX     120
+#define ARM_ELBOW_MAX     140
 #define ARM_GRIPPER_MIN   80
 #define ARM_GRIPPER_MAX   100
 #define ARM_SPEED_MIN     1
@@ -189,9 +189,9 @@ static bool armApplyTarget(uint8_t joint, uint32_t value, uint8_t minV, uint8_t 
 
 static void armHome() {
   armTarget[ARM_JOINT_BASE] = 10;
-  armTarget[ARM_JOINT_SHOULDER] = 85;
-  armTarget[ARM_JOINT_ELBOW] = 90;
-  armTarget[ARM_JOINT_GRIPPER] = 90;
+  armTarget[ARM_JOINT_SHOULDER] = 70;
+  armTarget[ARM_JOINT_ELBOW] = 100;
+  armTarget[ARM_JOINT_GRIPPER] = 80;
 }
 
 static void armUpdateMotion() {
