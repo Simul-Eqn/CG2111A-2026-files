@@ -82,22 +82,18 @@ def scan_rounds(lidar, mode):
     The generator runs until the LIDAR is disconnected or an exception is
     raised by the underlying PyRPlidar library.
     """
-    # Some drivers can emit unreliable start_flag transitions. Use angle-wrap
-    # detection to define one full revolution robustly.
     buff = []
-    prev_angle = None
-    min_points_per_round = 30
-
-    for meas in lidar.start_scan()():
-        angle = float(meas.angle)
-
-        if prev_angle is not None and angle + 30.0 < prev_angle:
-            if len(buff) >= min_points_per_round:
+    started = False
+    for meas in lidar.start_scan()():#mode)():
+        if meas.start_flag:
+            # A start_flag marks the beginning of a new rotation.
+            # Yield the completed buffer from the previous rotation.
+            if started and buff:
                 yield [m.angle for m in buff], [m.distance for m in buff]
-            buff = []
-
-        buff.append(meas)
-        prev_angle = angle
+            buff = [meas]
+            started = True
+        elif started:
+            buff.append(meas)
 
 
 def disconnect(lidar):

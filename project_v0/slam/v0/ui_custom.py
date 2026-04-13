@@ -595,7 +595,7 @@ class SlamCustomUI:
         self._ax_map.set_title('Occupancy Map')
         self._ax_map.set_xlim(MAP_SIZE_PIXELS - 1, 0)
         self._ax_map.set_ylim(MAP_SIZE_PIXELS - 1, 0)
-        self._ax_map.set_aspect('equal', adjustable='box')
+        self._ax_map.set_aspect('equal', adjustable='datalim')
         self._ax_map.set_autoscale_on(False)
 
         init_img = np.full((MAP_SIZE_PIXELS, MAP_SIZE_PIXELS), 127, dtype=np.uint8)
