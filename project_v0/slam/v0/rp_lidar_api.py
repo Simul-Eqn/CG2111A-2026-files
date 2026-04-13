@@ -291,6 +291,21 @@ lidar_instances = {}
 scan_generators = {}
 next_lidar_id = 1
 scan_mode_tracker = {}
+MIN_SCAN_POINTS_TO_SEND = 30
+scan_diag = {}
+
+
+def _diag_for_lidar(lidar_id: int) -> dict:
+    d = scan_diag.get(lidar_id)
+    if d is None:
+        d = {
+            'requests': 0,
+            'sent': 0,
+            'tiny_skips': 0,
+            'empty_replies': 0,
+        }
+        scan_diag[lidar_id] = d
+    return d
 
 async def handle_client(reader, writer):
     global next_lidar_id, _frames_remaining, _motor_speed
@@ -363,6 +378,12 @@ async def handle_client(reader, writer):
                     lidar = lidar_instances[lidar_id]
                     scan_generators[lidar_id] = scan_rounds(lidar, mode)
                     scan_mode_tracker[lidar_id] = mode
+                    scan_diag[lidar_id] = {
+                        'requests': 0,
+                        'sent': 0,
+                        'tiny_skips': 0,
+                        'empty_replies': 0,
+                    }
                     response = struct.pack('b', 1)  # success
                     print(f"  Started scan rounds for LIDAR {lidar_id} with mode {mode}")
                 else:
@@ -376,8 +397,43 @@ async def handle_client(reader, writer):
                 lidar_id = struct.unpack('i', lidar_id_data)[0]
                 
                 if lidar_id in scan_generators:
+                    diag = _diag_for_lidar(lidar_id)
+                    diag['requests'] += 1
                     try:
-                        angles, distances = next(scan_generators[lidar_id])
+                        angles = None
+                        distances = None
+                        skipped_sizes = []
+
+                        # Skip tiny or malformed rounds so clients do not
+                        # receive pathological 1-2 point scans.
+                        for _ in range(12):
+                            cand_angles, cand_distances = next(scan_generators[lidar_id])
+                            if len(cand_angles) >= MIN_SCAN_POINTS_TO_SEND and len(cand_distances) == len(cand_angles):
+                                angles, distances = cand_angles, cand_distances
+                                break
+                            skipped_sizes.append((len(cand_angles), len(cand_distances)))
+
+                        if angles is None or distances is None:
+                            diag['tiny_skips'] += len(skipped_sizes)
+                            diag['empty_replies'] += 1
+                            if diag['empty_replies'] <= 3 or diag['empty_replies'] % 20 == 0:
+                                print(
+                                    f"[rp_lidar_api] WARN lidar={lidar_id} no usable round; "
+                                    f"skipped={skipped_sizes[:4]} totalTinySkips={diag['tiny_skips']} "
+                                    f"req={diag['requests']}"
+                                )
+                            writer.write(struct.pack('b', 0))
+                            await writer.drain()
+                            continue
+
+                        if skipped_sizes:
+                            diag['tiny_skips'] += len(skipped_sizes)
+                            if diag['tiny_skips'] <= 5 or diag['tiny_skips'] % 50 == 0:
+                                print(
+                                    f"[rp_lidar_api] INFO lidar={lidar_id} filtered tiny rounds "
+                                    f"sample={skipped_sizes[:3]} totalTinySkips={diag['tiny_skips']}"
+                                )
+
                         # Send success flag
                         writer.write(struct.pack('b', 1))
                         # Send count
@@ -390,6 +446,12 @@ async def handle_client(reader, writer):
                         for distance in distances:
                             writer.write(struct.pack('f', distance))
                         await writer.drain()
+                        diag['sent'] += 1
+                        if diag['sent'] <= 3 or diag['sent'] % 100 == 0:
+                            print(
+                                f"[rp_lidar_api] lidar={lidar_id} sentRound count={count} "
+                                f"sent={diag['sent']} req={diag['requests']} tinySkips={diag['tiny_skips']}"
+                            )
                         # don't print anymore to save compute & not clog logs 
                         #print(f"  Sent scan round {count} measurements for LIDAR {lidar_id}")
                     except StopIteration:
@@ -413,6 +475,8 @@ async def handle_client(reader, writer):
                         del scan_generators[lidar_id]
                     if lidar_id in scan_mode_tracker:
                         del scan_mode_tracker[lidar_id]
+                    if lidar_id in scan_diag:
+                        del scan_diag[lidar_id]
                     response = struct.pack('b', 1)  # success
                     print(f"  Disconnected LIDAR {lidar_id}")
                 else:
