@@ -153,6 +153,33 @@ def _debug_log(msg):
         print(f"[lidar-debug] {msg}")
 
 
+def _debug_scan_mode_details(lidar, mode):
+    if not DEBUG_LIDAR:
+        return
+    try:
+        scan_modes = lidar.get_scan_modes()
+        if 0 <= mode < len(scan_modes):
+            selected = scan_modes[mode]
+            ans_type = getattr(selected, 'ans_type', None)
+            ans_type_int = int(ans_type) if isinstance(ans_type, int) else -1
+            ans_name = {
+                0x81: 'NORMAL',
+                0x82: 'CAPSULED',
+                0x83: 'HQ',
+                0x84: 'ULTRA_CAPSULED',
+                0x85: 'DENSE_CAPSULED',
+            }.get(ans_type_int, f'UNKNOWN({ans_type})')
+            _debug_log(
+                f"scan mode details mode={mode} ans_type=0x{ans_type_int:02X}({ans_name}) "
+                f"us_per_sample={getattr(selected, 'us_per_sample', 'n/a')} "
+                f"max_distance={getattr(selected, 'max_distance', 'n/a')}"
+            )
+        else:
+            _debug_log(f"scan mode details mode={mode} out_of_range total_modes={len(scan_modes)}")
+    except Exception as exc:
+        _debug_log(f"scan mode details unavailable mode={mode} err={exc}")
+
+
 def _compute_checksum(data: bytes) -> int:
     result = 0
     for b in data:
@@ -410,6 +437,7 @@ async def handle_client(reader, writer):
                 
                 if lidar_id in lidar_instances:
                     lidar = lidar_instances[lidar_id]
+                    _debug_scan_mode_details(lidar, mode)
                     scan_generators[lidar_id] = scan_rounds(lidar, mode)
                     scan_mode_tracker[lidar_id] = mode
                     response = struct.pack('b', 1)  # success
