@@ -45,6 +45,7 @@ class ProcessSharedState:
     status_note  - short human-readable status string (up to 127 bytes)
     error_message - error description if the SLAM process encountered a problem
     stop_event   - set this from the UI to ask the SLAM process to exit
+    reset_event  - set this from the UI to reinitialise SLAM/map from scratch
     """
 
     def __init__(self):
@@ -78,6 +79,8 @@ class ProcessSharedState:
 
         # Signal from the UI to ask the SLAM process to stop cleanly.
         self.stop_event = multiprocessing.Event()
+        # Signal from the UI to reset SLAM and clear the map.
+        self.reset_event = multiprocessing.Event()
 
     def set_status(self, msg: str):
         """Write a status string (truncated to 127 bytes)."""

@@ -277,6 +277,17 @@ class SlamCustomUI:
         self._apply_view_window()
         self._status_msg = '[VIEW] home'
 
+    def _request_slam_reset(self):
+        self.pss.reset_event.set()
+        self._red_points.clear()
+        self._green_points.clear()
+        self._blue_points.clear()
+        self._camera_count = 0
+        self._last_map_version = -1
+        self._last_pose_version = -1
+        self._go_home_view()
+        self._status_msg = '[SLAM] reset requested'
+
     @staticmethod
     def _classify_color(r: int, g: int, b: int) -> str:
         # Frequency-based sensor: often lower freq means stronger reflected channel.
@@ -358,6 +369,10 @@ class SlamCustomUI:
         if key == 'p':
             self.pss.paused.value = not self.pss.paused.value
             self._status_msg = 'paused' if self.pss.paused.value else 'resumed'
+            return
+
+        if key == 'r':
+            self._request_slam_reset()
             return
 
         if key == 'e':
@@ -494,7 +509,7 @@ class SlamCustomUI:
             f"ctr=({self._view_center_x:.0f},{self._view_center_y:.0f}) rot={self._display_rotation_deg:+.1f} deg\n"
             f"Camera={self._camera_count} Colors(R/G/B)={len(self._red_points)}/{len(self._green_points)}/{len(self._blue_points)}\n"
             f"Action: {self._status_msg}\n"
-            f"Keys: WASD/X [] C F E P | Arrows I K O J L H Q | 2nd terminal: second_terminal/second_terminal.py"
+            f"Keys: WASD/X [] C F E P R | Arrows I K O J L H Q | 2nd terminal: second_terminal/second_terminal.py"
         )
         if snap['error_message']:
             info += f"\nError: {snap['error_message']}"

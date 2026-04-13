@@ -31,6 +31,7 @@ from settings import (
     MAP_SIZE_PIXELS, MAP_SIZE_METERS, HOLE_WIDTH_MM, MAP_QUALITY,
     LIDAR_OFFSET_DEG, LIDAR_ANGLE_SIGN, MIN_VALID_POINTS, INITIAL_ROUNDS_SKIP,
     MAP_UPDATE_INTERVAL, MAX_TRANSLATION_PER_SCAN_MM, MAX_ROTATION_PER_SCAN_DEG,
+    UNKNOWN_BYTE,
 )
 from shared_state import ProcessSharedState
 
@@ -187,14 +188,21 @@ def run_slam_process(pss: ProcessSharedState) -> None:
     # Laser() describes the sensor: (num_bins, scan_rate_hz, fov_deg, max_dist_mm)
     # RMHC_SLAM uses random-mutation hill climbing to find the best pose update.
     laser = Laser(SCAN_SIZE, SCAN_RATE_HZ, DETECTION_ANGLE, MAX_DISTANCE_MM)
-    slam = RMHC_SLAM(
-        laser,
-        MAP_SIZE_PIXELS,
-        MAP_SIZE_METERS,
-        hole_width_mm=HOLE_WIDTH_MM,
-        map_quality=MAP_QUALITY,
-    )
-    mapbytes = bytearray(MAP_SIZE_PIXELS * MAP_SIZE_PIXELS)
+    map_size = MAP_SIZE_PIXELS * MAP_SIZE_PIXELS
+
+    def _new_slam_instance():
+        return RMHC_SLAM(
+            laser,
+            MAP_SIZE_PIXELS,
+            MAP_SIZE_METERS,
+            hole_width_mm=HOLE_WIDTH_MM,
+            map_quality=MAP_QUALITY,
+        )
+
+    slam = _new_slam_instance()
+    mapbytes = bytearray([UNKNOWN_BYTE]) * map_size
+    pss.shm.buf[:map_size] = mapbytes
+    pss.map_version.value += 1
 
     pss.set_status(f'connected (mode {scan_mode})')
     pss.connected.value = True
@@ -210,6 +218,26 @@ def run_slam_process(pss: ProcessSharedState) -> None:
         for raw_angles, raw_distances in lidar_driver.scan_rounds(lidar, scan_mode):
             if pss.stop_event.is_set():
                 break
+
+            if pss.reset_event.is_set():
+                pss.reset_event.clear()
+                slam = _new_slam_instance()
+                mapbytes = bytearray([UNKNOWN_BYTE]) * map_size
+                pss.shm.buf[:map_size] = mapbytes
+                pss.map_version.value += 1
+
+                pss.x_mm.value = 0.0
+                pss.y_mm.value = 0.0
+                pss.theta_deg.value = 0.0
+                pss.pose_version.value += 1
+
+                previous_distances = None
+                previous_pose = None
+                round_num = 0
+                pss.rounds_seen.value = 0
+                pss.valid_points.value = 0
+                pss.set_status('map reset: rebuilding from scratch')
+                continue
 
             round_num += 1
             pss.rounds_seen.value = round_num
