@@ -24,6 +24,8 @@ from pathlib import Path
 sys.path.insert(1, str(Path(__file__).parent.parent.parent.parent/"project_v0"/"dependencies"))
 print(sys.path[1])
 
+USE_EXPRESS_SCAN = "--express" in sys.argv
+
 import time
 from pyrplidar import PyRPlidar
 import camera_handler as CameraHandler
@@ -83,11 +85,18 @@ def scan_rounds(lidar, mode):
     The generator runs until the LIDAR is disconnected or an exception is
     raised by the underlying PyRPlidar library.
     """
-    _debug_log(f"scan_rounds start api=start_scan mode={mode}")
+    scan_api = "start_scan_express" if USE_EXPRESS_SCAN else "start_scan"
+    _debug_log(f"scan_rounds start api={scan_api} mode={mode}")
+
+    if USE_EXPRESS_SCAN:
+        scan_iter = lidar.start_scan_express(mode)()
+    else:
+        scan_iter = lidar.start_scan()()
+
     buff = []
     started = False
     round_index = 0
-    for meas in lidar.start_scan()():#mode)():
+    for meas in scan_iter:
         if meas.start_flag:
             # A start_flag marks the beginning of a new rotation.
             # Yield the completed buffer from the previous rotation.
@@ -143,7 +152,7 @@ CAMERA_CAPTURE_LIMIT = 10
 _frames_remaining = CAMERA_CAPTURE_LIMIT
 _motor_speed = 150
 
-DEBUG_LIDAR = os.getenv("RP_LIDAR_DEBUG", "1") not in ("0", "false", "False", "no", "NO")
+DEBUG_LIDAR = "--debug" in sys.argv #os.getenv("RP_LIDAR_DEBUG", "1") not in ("0", "false", "False", "no", "NO")
 SCAN_DEBUG_EVERY_N = max(1, int(os.getenv("RP_LIDAR_SCAN_DEBUG_EVERY_N", "20")))
 NETWORK_SLOW_DRAIN_MS = float(os.getenv("RP_LIDAR_SLOW_DRAIN_MS", "50"))
 
@@ -172,7 +181,8 @@ def _debug_scan_mode_details(lidar, mode):
             _debug_log(
                 f"scan mode details mode={mode} ans_type=0x{ans_type_int:02X}({ans_name}) "
                 f"us_per_sample={getattr(selected, 'us_per_sample', 'n/a')} "
-                f"max_distance={getattr(selected, 'max_distance', 'n/a')}"
+                f"max_distance={getattr(selected, 'max_distance', 'n/a')} "
+                f"run_express={USE_EXPRESS_SCAN}"
             )
         else:
             _debug_log(f"scan mode details mode={mode} out_of_range total_modes={len(scan_modes)}")
@@ -713,6 +723,7 @@ async def main():
 
 if __name__ == "__main__":
     try:
+        print(f"[lidar] Starting rp_lidar_api with express={USE_EXPRESS_SCAN}")
         asyncio.run(main())
     except KeyboardInterrupt:
         print("Server stopped manually.")
