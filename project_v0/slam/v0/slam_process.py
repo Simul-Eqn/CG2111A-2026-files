@@ -26,10 +26,12 @@ import time
 import math
 from typing import Optional
 
+from lidar_scan_tools import circular_coverage_deg, merge_scan_segments, scan_is_complete
 from settings import (
     SCAN_SIZE, SCAN_RATE_HZ, DETECTION_ANGLE, MAX_DISTANCE_MM,
     MAP_SIZE_PIXELS, MAP_SIZE_METERS, HOLE_WIDTH_MM, MAP_QUALITY,
     LIDAR_OFFSET_DEG, LIDAR_ANGLE_SIGN, MIN_VALID_POINTS, INITIAL_ROUNDS_SKIP,
+    MIN_RAW_SCAN_POINTS, MIN_RAW_SCAN_COVERAGE_DEG,
     MAP_UPDATE_INTERVAL, MAX_TRANSLATION_PER_SCAN_MM, MAX_ROTATION_PER_SCAN_DEG,
     UNKNOWN_BYTE,
 )
@@ -211,15 +213,15 @@ def run_slam_process(pss: ProcessSharedState) -> None:
     # valid points (e.g. the robot is facing a large open area).
     previous_distances: Optional[list[int]] = None
     previous_pose: Optional[tuple[float, float, float]] = None
+    pending_raw_angles: list[float] = []
+    pending_raw_distances: list[float] = []
     round_num = 0
     last_map_update = time.monotonic()
 
     try:
-        for raw_angles, raw_distances in lidar_driver.scan_rounds(lidar, scan_mode):
+        for incoming_angles, incoming_distances in lidar_driver.scan_rounds(lidar, scan_mode):
             if pss.stop_event.is_set():
                 break
-
-            pss.raw_points.value = len(raw_distances)
 
             if pss.reset_event.is_set():
                 pss.reset_event.clear()
@@ -235,12 +237,36 @@ def run_slam_process(pss: ProcessSharedState) -> None:
 
                 previous_distances = None
                 previous_pose = None
+                pending_raw_angles = []
+                pending_raw_distances = []
                 round_num = 0
                 pss.rounds_seen.value = 0
                 pss.valid_points.value = 0
                 pss.raw_points.value = 0
                 pss.set_status('map reset: rebuilding from scratch')
                 continue
+
+            raw_angles, raw_distances = merge_scan_segments(
+                (pending_raw_angles, pending_raw_distances),
+                (incoming_angles, incoming_distances),
+            )
+
+            if not scan_is_complete(
+                raw_angles,
+                min_points=MIN_RAW_SCAN_POINTS,
+                min_coverage_deg=MIN_RAW_SCAN_COVERAGE_DEG,
+            ):
+                pending_raw_angles = raw_angles
+                pending_raw_distances = raw_distances
+                coverage = circular_coverage_deg(raw_angles)
+                pss.set_status(
+                    f'coalescing raw scan ({len(raw_distances)} pts, {coverage:.0f} deg)'
+                )
+                continue
+
+            pending_raw_angles = []
+            pending_raw_distances = []
+            pss.raw_points.value = len(raw_distances)
 
             round_num += 1
             pss.rounds_seen.value = round_num

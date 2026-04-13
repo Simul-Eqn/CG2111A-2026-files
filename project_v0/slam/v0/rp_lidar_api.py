@@ -29,11 +29,13 @@ import camera_handler as CameraHandler
 
 from packets import *
 
+from lidar_scan_tools import normalize_angle_deg, sort_scan_pairs
 from settings import LIDAR_PORT, LIDAR_BAUD
 
 
 ARDUINO_PORT = "/dev/ttyACM0"
 ARDUINO_BAUD = 9600
+ANGLE_WRAP_THRESHOLD_DEG = 45.0
 
 
 def connect(port=LIDAR_PORT, baudrate=LIDAR_BAUD):
@@ -82,22 +84,34 @@ def scan_rounds(lidar, mode):
     The generator runs until the LIDAR is disconnected or an exception is
     raised by the underlying PyRPlidar library.
     """
-    buff = []
-    started = False
-    for meas in lidar.start_scan()():#mode)():
-        if meas.start_flag:
-            # A start_flag marks the beginning of a new rotation.
-            # Yield the completed buffer from the previous rotation.
-            if started and buff:
-                yield [m.angle for m in buff], [m.distance for m in buff]
-            buff = [meas]
-            started = True
-        elif started:
-            buff.append(meas)
-            buff = [meas]
-            started = True
-        elif started:
-            buff.append(meas)
+    buff_angles = []
+    buff_distances = []
+    prev_angle = None
+
+    try:
+        scan_iter = lidar.start_scan_express(mode)()
+    except Exception as exc:
+        print(
+            f"[lidar] Express scan mode {mode} unavailable, "
+            f"falling back to standard scan: {exc}"
+        )
+        scan_iter = lidar.start_scan()()
+
+    for meas in scan_iter:
+        angle = normalize_angle_deg(meas.angle)
+
+        wrapped = (
+            prev_angle is not None
+            and angle + ANGLE_WRAP_THRESHOLD_DEG < prev_angle
+        )
+        if wrapped and buff_angles:
+            yield sort_scan_pairs(buff_angles, buff_distances)
+            buff_angles = []
+            buff_distances = []
+
+        buff_angles.append(angle)
+        buff_distances.append(meas.distance)
+        prev_angle = angle
 
 
 def disconnect(lidar):

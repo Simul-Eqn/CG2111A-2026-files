@@ -47,9 +47,11 @@ SCAN_SIZE = 360
 # Approximate rotation rate of the RPLidar A1M8 in scans per second.
 SCAN_RATE_HZ = 8
 
-# Wait time (seconds) after receiving one scan response before requesting
-# the next scan response from the API server.
-LIDAR_POLL_DELAY = 0.07
+# Extra wait time (seconds) after receiving one scan response before
+# requesting the next one from the API server.
+# Keep this at 0 unless you are deliberately throttling traffic; adding idle
+# time here can let the sensor backlog grow and increase truncated scans.
+LIDAR_POLL_DELAY = 0.0
 
 # Field of view of the LIDAR in degrees (360 for a full-rotation sensor).
 DETECTION_ANGLE = 360
@@ -103,6 +105,12 @@ LIDAR_ANGLE_SIGN = -1
 # good scan instead.  Increase this if the map is noisy; decrease it if the
 # robot is in a sparse environment.
 MIN_VALID_POINTS = 80
+
+# Minimum number of raw measurements and angular coverage required before we
+# treat a scan as a complete 360-degree rotation. Shorter fragments are merged
+# with the next segment instead of being fed into SLAM directly.
+MIN_RAW_SCAN_POINTS = 120
+MIN_RAW_SCAN_COVERAGE_DEG = 300.0
 
 # Number of scans to skip at startup.  The LIDAR motor needs a few rotations
 # to reach full speed; early scans are noisier than steady-state scans.
