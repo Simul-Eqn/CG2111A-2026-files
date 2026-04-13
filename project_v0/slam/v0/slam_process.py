@@ -219,6 +219,8 @@ def run_slam_process(pss: ProcessSharedState) -> None:
             if pss.stop_event.is_set():
                 break
 
+            pss.raw_points.value = len(raw_distances)
+
             if pss.reset_event.is_set():
                 pss.reset_event.clear()
                 slam = _new_slam_instance()
@@ -236,6 +238,7 @@ def run_slam_process(pss: ProcessSharedState) -> None:
                 round_num = 0
                 pss.rounds_seen.value = 0
                 pss.valid_points.value = 0
+                pss.raw_points.value = 0
                 pss.set_status('map reset: rebuilding from scratch')
                 continue
 

@@ -36,6 +36,7 @@ class ProcessSharedState:
     y_mm         - robot y position in mm
     theta_deg    - robot heading in degrees (BreezySLAM convention: CCW from +x)
     valid_points - number of valid LIDAR readings in the most recent scan
+    raw_points   - number of raw LIDAR measurements in the most recent scan
     rounds_seen  - total number of LIDAR rotations processed so far
     map_version  - incremented each time the map is updated (use to skip redraws)
     pose_version - incremented each time the pose is updated
@@ -64,6 +65,7 @@ class ProcessSharedState:
 
         # Scan and update counters.
         self.valid_points = multiprocessing.Value(ctypes.c_int, 0)
+        self.raw_points = multiprocessing.Value(ctypes.c_int, 0)
         self.rounds_seen = multiprocessing.Value(ctypes.c_int, 0)
         self.map_version = multiprocessing.Value(ctypes.c_int, 0)
         self.pose_version = multiprocessing.Value(ctypes.c_int, 0)

@@ -89,6 +89,7 @@ class SlamCustomUI:
                 'y_mm': 0.0,
                 'theta_deg': 0.0,
                 'valid_points': 0,
+                'raw_points': 0,
                 'status_note': 'shutting down',
                 'rounds_seen': 0,
                 'map_version': 0,
@@ -107,6 +108,7 @@ class SlamCustomUI:
                 'y_mm': 0.0,
                 'theta_deg': 0.0,
                 'valid_points': 0,
+                'raw_points': 0,
                 'status_note': 'shared memory unavailable',
                 'rounds_seen': 0,
                 'map_version': 0,
@@ -124,6 +126,7 @@ class SlamCustomUI:
             'y_mm': self.pss.y_mm.value,
             'theta_deg': self.pss.theta_deg.value,
             'valid_points': self.pss.valid_points.value,
+            'raw_points': self.pss.raw_points.value,
             'status_note': self.pss.get_status(),
             'rounds_seen': self.pss.rounds_seen.value,
             'map_version': self.pss.map_version.value,
@@ -507,7 +510,7 @@ class SlamCustomUI:
         info = (
             f"State: {state}\n"
             f"Pose: x={snap['x_mm']:.0f} y={snap['y_mm']:.0f} th={snap['theta_deg']:+.1f} deg | "
-            f"Rounds={snap['rounds_seen']} Valid={snap['valid_points']}\n"
+            f"Rounds={snap['rounds_seen']} Valid={snap['valid_points']} Raw={snap['raw_points']}\n"
             f"View: z{self._zoom_idx + 1}/{len(self._zoom_levels_px)} "
             f"ctr=({self._view_center_x:.0f},{self._view_center_y:.0f}) rot={self._display_rotation_deg:+.1f} deg\n"
             f"Camera={self._camera_count} Colors(R/G/B)={len(self._red_points)}/{len(self._green_points)}/{len(self._blue_points)}\n"
