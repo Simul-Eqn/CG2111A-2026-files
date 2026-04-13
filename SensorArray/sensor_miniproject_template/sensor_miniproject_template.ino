@@ -189,7 +189,7 @@ static bool armApplyTarget(uint8_t joint, uint32_t value, uint8_t minV, uint8_t 
 
 static void armHome() {
   armTarget[ARM_JOINT_BASE] = 10;
-  armTarget[ARM_JOINT_SHOULDER] = 115;
+  armTarget[ARM_JOINT_SHOULDER] = 85;
   armTarget[ARM_JOINT_ELBOW] = 90;
   armTarget[ARM_JOINT_GRIPPER] = 90;
 }
