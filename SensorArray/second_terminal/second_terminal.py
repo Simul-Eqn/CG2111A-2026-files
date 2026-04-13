@@ -182,7 +182,7 @@ def _printPacket(pkt):
 def _arm_range_for(cmd: str):
     if cmd == 'b':
         return ARM_BASE_MIN, ARM_BASE_MAX, COMMAND_ARM_BASE, "BASE"
-    if cmd == 's':
+    if cmd == 'z':
         return ARM_SHOULDER_MIN, ARM_SHOULDER_MAX, COMMAND_ARM_SHOULDER, "SHOULDER"
     if cmd == 'e':
         return ARM_ELBOW_MIN, ARM_ELBOW_MAX, COMMAND_ARM_ELBOW, "ELBOW"

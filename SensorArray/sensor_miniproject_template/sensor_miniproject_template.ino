@@ -70,7 +70,7 @@ bool currentStatus = true;     //helper variable for INT5 ISR
 // Robot arm (Timer-safe integration)
 // Uses Arduino Servo library to avoid direct register/timer clashes
 // with existing Timer2 debounce/color timing and other modules.
-// On Mega, use analog pins A9-A12 for servo signal wires.
+
 // =============================================================
 
 #define ARM_BASE_PIN      34
@@ -103,7 +103,7 @@ static const uint8_t armPins[ARM_JOINT_COUNT] = {
 };
 static uint8_t armPos[ARM_JOINT_COUNT] = {90, 90, 90, 90};
 static uint8_t armTarget[ARM_JOINT_COUNT] = {90, 90, 90, 90};
-static uint8_t armMsPerDeg = 10;
+static uint8_t armMsPerDeg = 20;
 static uint32_t armLastUpdate[ARM_JOINT_COUNT] = {0, 0, 0, 0};
 // =============================================================
 // Packet helpers (pre-implemented for you)
@@ -189,7 +189,7 @@ static bool armApplyTarget(uint8_t joint, uint32_t value, uint8_t minV, uint8_t 
 
 static void armHome() {
   armTarget[ARM_JOINT_BASE] = 10;
-  armTarget[ARM_JOINT_SHOULDER] = 90;
+  armTarget[ARM_JOINT_SHOULDER] = 85;
   armTarget[ARM_JOINT_ELBOW] = 90;
   armTarget[ARM_JOINT_GRIPPER] = 90;
 }
