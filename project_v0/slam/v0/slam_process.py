@@ -212,8 +212,6 @@ def run_slam_process(pss: ProcessSharedState) -> None:
     previous_distances: Optional[list[int]] = None
     previous_pose: Optional[tuple[float, float, float]] = None
     round_num = 0
-    low_raw_rounds = 0
-    low_valid_rounds = 0
     last_map_update = time.monotonic()
 
     try:
@@ -247,14 +245,6 @@ def run_slam_process(pss: ProcessSharedState) -> None:
             round_num += 1
             pss.rounds_seen.value = round_num
 
-            if pss.raw_points.value < 30:
-                low_raw_rounds += 1
-                if low_raw_rounds <= 5 or low_raw_rounds % 25 == 0:
-                    print(
-                        f"[slam_process] WARN low raw scan points: raw={pss.raw_points.value} "
-                        f"round={round_num} lowRawSeen={low_raw_rounds}"
-                    )
-
             # Skip the first few scans while the motor reaches full speed.
             if round_num <= INITIAL_ROUNDS_SKIP:
                 pss.valid_points.value = 0
@@ -269,15 +259,6 @@ def run_slam_process(pss: ProcessSharedState) -> None:
             # Resample raw measurements into fixed-size angle bins.
             scan_distances, valid = _resample_scan(raw_angles, raw_distances)
             pss.valid_points.value = valid
-
-            if valid < max(5, MIN_VALID_POINTS // 4):
-                low_valid_rounds += 1
-                if low_valid_rounds <= 5 or low_valid_rounds % 25 == 0:
-                    print(
-                        f"[slam_process] WARN low valid points: raw={pss.raw_points.value} "
-                        f"valid={valid} minValid={MIN_VALID_POINTS} round={round_num} "
-                        f"lowValidSeen={low_valid_rounds}"
-                    )
 
             # Choose which scan to feed SLAM.
             if valid >= MIN_VALID_POINTS:
