@@ -166,11 +166,11 @@ def run():
                 v = int(tok[1])
                 _send(client, COMMAND_ARM_SET_SPEED, params=[v] + [0] * (PARAMS_COUNT - 1))
                 continue
-            if cmd in ('b', 's', 'g') and len(tok) == 2 and tok[1].isdigit():
+            if cmd in ('b', 'z', 'g') and len(tok) == 2 and tok[1].isdigit():
                 v = int(tok[1])
                 mapping = {
                     'b': COMMAND_ARM_BASE,
-                    's': COMMAND_ARM_SHOULDER,
+                    'z': COMMAND_ARM_SHOULDER,
                     'g': COMMAND_ARM_GRIPPER,
                 }
                 _send(client, mapping[cmd], params=[v] + [0] * (PARAMS_COUNT - 1))
