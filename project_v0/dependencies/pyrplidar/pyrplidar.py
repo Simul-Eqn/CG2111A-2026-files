@@ -141,6 +141,7 @@ class PyRPlidar:
     
 
     def start_scan(self):
+        print('STARTING SCAN, UNMISTAKEABLE PRINT')
         self.send_command(RPLIDAR_CMD_SCAN)
         discriptor = self.receive_discriptor()
     

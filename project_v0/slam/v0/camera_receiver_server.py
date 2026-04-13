@@ -37,7 +37,7 @@ async def handle_client(reader, writer):
             img = np.frombuffer(img_data, dtype=np.uint8).reshape((img_height, img_width))
 
             display_img = cv2.resize(img, DISPLAY_SIZE, interpolation=cv2.INTER_LINEAR)
-            display_img = cv2.rotate(display_img, cv2.ROTATE_180)
+            #display_img = cv2.rotate(display_img, cv2.ROTATE_180)
 
             cv2.imshow(window_name, display_img)
             cv2.waitKey(1)
