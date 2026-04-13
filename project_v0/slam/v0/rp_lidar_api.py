@@ -38,6 +38,8 @@ from settings import LIDAR_PORT, LIDAR_BAUD
 ARDUINO_PORT = "/dev/ttyACM0"
 ARDUINO_BAUD = 9600
 
+ANS_TYPE_NORMAL = 0x81
+
 
 def connect(port=LIDAR_PORT, baudrate=LIDAR_BAUD):
     """Open the LIDAR serial port, reset the sensor, and start the motor.
@@ -69,7 +71,19 @@ def get_scan_mode(lidar):
     Falls back to mode 2 (a safe default for the A1M8) if the query fails.
     """
     try:
-        return lidar.get_scan_mode_typical()
+        typical = lidar.get_scan_mode_typical()
+        if USE_EXPRESS_SCAN:
+            return typical
+
+        # Non-express decoding requires NORMAL ans_type frames.
+        scan_modes = lidar.get_scan_modes()
+        for idx, scan_mode in enumerate(scan_modes):
+            if getattr(scan_mode, 'ans_type', None) == ANS_TYPE_NORMAL:
+                _debug_log(f"non-express selected NORMAL mode={idx} instead of typical={typical}")
+                return idx
+
+        _debug_log(f"non-express NORMAL mode not found, fallback typical={typical}")
+        return typical
     except Exception:
         return 2
 
