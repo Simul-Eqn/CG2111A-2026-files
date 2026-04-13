@@ -304,6 +304,9 @@ class SlamCustomUI:
         elif color_name == 'blue':
             self._blue_points.append(point)
 
+    def _current_pose_mm(self) -> tuple[float, float]:
+        return float(self.pss.x_mm.value), float(self.pss.y_mm.value)
+
     @staticmethod
     def _points_to_xy(points):
         if not points:
@@ -563,6 +566,13 @@ class SlamCustomUI:
         # Start second terminal relay first so remote clients can connect
         # even while LIDAR/API initialization is still in progress.
         if _second_term_available:
+            try:
+                second_term.configure_ui_callbacks(
+                    dot_callback=self._stamp_color_at_robot,
+                    pose_callback=self._current_pose_mm,
+                )
+            except Exception:
+                pass
             second_term.start()
 
         self.slam_proc.start()

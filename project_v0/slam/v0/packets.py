@@ -20,6 +20,9 @@ COMMAND_ARM_GRIPPER = 23
 COMMAND_ARM_HOME = 24
 COMMAND_ARM_SET_SPEED = 25
 
+# Runtime settings edit command (updates settings.py on controller side)
+COMMAND_SET_SETTING = 30
+
 RESP_OK     = 0
 RESP_STATUS = 1
 

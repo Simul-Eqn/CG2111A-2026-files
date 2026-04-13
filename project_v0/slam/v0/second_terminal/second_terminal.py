@@ -118,7 +118,7 @@ def run():
         return
 
     print('[second_terminal] connected')
-    print('[second_terminal] commands: e, c, w, a, s, d, x, +, -, h, b/s/e/g <angle>, v <speed>, q')
+    print('[second_terminal] commands: e, c, w, a, s, d, x, +, -, h, b/s/e/g <angle>, v <speed>, set <KEY> <VALUE>, q')
 
     rx = threading.Thread(target=_receiver, args=(client,), daemon=True)
     rx.start()
@@ -138,6 +138,12 @@ def run():
                 continue
             if cmd == 'c':
                 _send(client, COMMAND_COLOR_SENSOR)
+                continue
+            if cmd == 'set' and len(tok) >= 3:
+                key = tok[1].strip().upper()
+                value = line.split(None, 2)[2].strip()
+                expr = f'{key}={value}'
+                _send(client, COMMAND_SET_SETTING, data=expr.encode('ascii', errors='replace')[:MAX_STR_LEN])
                 continue
             if cmd in ('w', 'a', 's', 'd', 'x'):
                 mapping = {
