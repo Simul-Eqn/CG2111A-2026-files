@@ -51,16 +51,16 @@ struct ColorRef {
   float B;
 };
 
-#define RED_MIN 1800.0
+#define RED_MIN 1500.0
 #define RED_MAX 10000.0
-#define GREEN_MIN 2000.0
+#define GREEN_MIN 1500.0
 #define GREEN_MAX  10000.0
 #define BLUE_MIN 6000.0
 #define BLUE_MAX 30000.0
 
-ColorRef RED_REF   = {(6110.0-RED_MIN)/RED_MAX, (2200.0-GREEN_MIN)/GREEN_MAX, (10200.0-BLUE_MIN)/BLUE_MAX};
-ColorRef GREEN_REF = {(3590.0-RED_MIN)/RED_MAX, (4780.0-GREEN_MIN)/GREEN_MAX, (11450.0-BLUE_MIN)/BLUE_MAX};
-ColorRef BLUE_REF  = {(3240.0-RED_MIN)/RED_MAX, (5760.0-GREEN_MIN)/GREEN_MAX, (16880.0-BLUE_MIN)/BLUE_MAX};
+ColorRef RED_REF   = {(5600-RED_MIN)/RED_MAX, (1900-GREEN_MIN)/GREEN_MAX, (9000-BLUE_MIN)/BLUE_MAX};
+ColorRef GREEN_REF = {(3590-RED_MIN)/RED_MAX, (4780-GREEN_MIN)/GREEN_MAX, (11450-BLUE_MIN)/BLUE_MAX};
+ColorRef BLUE_REF  = {(3240-RED_MIN)/RED_MAX, (5760-GREEN_MIN)/GREEN_MAX, (16880-BLUE_MIN)/BLUE_MAX};
 
 int motorSpeed = 150;
 //uint16_t lastDebounceTime = 0; //debounce variable
@@ -83,7 +83,7 @@ bool currentStatus = true;     //helper variable for INT5 ISR
 #define ARM_SHOULDER_MIN  80
 #define ARM_SHOULDER_MAX  120
 #define ARM_ELBOW_MIN     60
-#define ARM_ELBOW_MAX     105
+#define ARM_ELBOW_MAX     120
 #define ARM_GRIPPER_MIN   80
 #define ARM_GRIPPER_MAX   100
 #define ARM_SPEED_MIN     1
@@ -188,7 +188,7 @@ static bool armApplyTarget(uint8_t joint, uint32_t value, uint8_t minV, uint8_t 
 }
 
 static void armHome() {
-  armTarget[ARM_JOINT_BASE] = 50;
+  armTarget[ARM_JOINT_BASE] = 10;
   armTarget[ARM_JOINT_SHOULDER] = 90;
   armTarget[ARM_JOINT_ELBOW] = 90;
   armTarget[ARM_JOINT_GRIPPER] = 90;
