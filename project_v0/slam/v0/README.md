@@ -54,6 +54,8 @@ settings.py change LIDAR_OFFSET_DEG = 180
 
 ```python slam.py``` 
 
+100.109.145.53
+
 Or with custom API server: (this is the raspberrypi's ip address)
 ```bash
 set MPSV0_SERVER_IP=127.0.0.1
