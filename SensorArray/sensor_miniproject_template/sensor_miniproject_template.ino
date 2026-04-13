@@ -420,12 +420,22 @@ void move(int speed, int direction)
       motorBR.run(BACKWARD);
       break;
     case CW:
+      motorFL.setSpeed(250);
+      motorFR.setSpeed(250);
+      motorBL.setSpeed(250);
+      motorBR.setSpeed(250);
+      sendMotorStatus(motorSpeed);
       motorFL.run(FORWARD);
       motorFR.run(FORWARD);
       motorBL.run(FORWARD);
       motorBR.run(FORWARD);
       break;
     case CCW:
+      motorFL.setSpeed(250);
+      motorFR.setSpeed(250);
+      motorBL.setSpeed(250);
+      motorBR.setSpeed(250);
+      sendMotorStatus(motorSpeed);
       motorFL.run(BACKWARD);
       motorFR.run(BACKWARD);
       motorBL.run(BACKWARD);
