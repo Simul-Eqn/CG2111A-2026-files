@@ -9,6 +9,9 @@ class PyRPlidar:
     def __init__(self):
         self.lidar_serial = None
         self.measurements = None
+        self._last_port = None
+        self._last_baudrate = None
+        self._last_timeout = None
     
     def __del__(self):
         self.disconnect()
@@ -16,9 +19,27 @@ class PyRPlidar:
     
 
     def connect(self, port="/dev/ttyUSB0", baudrate=115200, timeout=3):
+        self._last_port = port
+        self._last_baudrate = baudrate
+        self._last_timeout = timeout
         self.lidar_serial = PyRPlidarSerial()
         self.lidar_serial.open(port, baudrate, timeout)
         # print("PyRPlidar Info : device is connected")
+
+
+    def _reconnect_and_restart_scan(self):
+        if self._last_port is None or self._last_baudrate is None or self._last_timeout is None:
+            raise PyRPlidarConnectionError("PyRPlidar Error : reconnect parameters are unavailable")
+
+        try:
+            self.send_command(RPLIDAR_CMD_STOP)
+        except Exception:
+            pass
+
+        self.disconnect()
+        self.connect(port=self._last_port, baudrate=self._last_baudrate, timeout=self._last_timeout)
+        self.send_command(RPLIDAR_CMD_SCAN)
+        return self.receive_discriptor()
 
 
     def disconnect(self):
@@ -162,6 +183,15 @@ class PyRPlidar:
                             self.send_command(RPLIDAR_CMD_SCAN)
                             discriptor = self.receive_discriptor()
                             invalid_frames = 0
+
+                            if hard_resyncs >= 3:
+                                print("PyRPlidar warning: escalating to full reconnect+scan restart")
+                                try:
+                                    discriptor = self._reconnect_and_restart_scan()
+                                    print("PyRPlidar warning: full reconnect recovery succeeded")
+                                    hard_resyncs = 0
+                                except Exception as exc:
+                                    print(f"PyRPlidar warning: full reconnect recovery failed: {exc}")
                         continue
 
                 elif invalid_frames > 0:

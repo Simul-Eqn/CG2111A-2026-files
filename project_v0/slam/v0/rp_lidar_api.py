@@ -166,11 +166,22 @@ def scan_rounds(lidar, mode):
                 count = len(distances)
                 valid_nonzero = sum(1 for d in distances if d > 0)
 
+                if count == 0:
+                    _debug_log(
+                        f"scan_round skipped_empty idx={round_index} mode={mode} "
+                        f"raw_count={len(buff)}"
+                    )
+                    buff = [meas]
+                    started = True
+                    continue
+
                 if count <= 1:
-                    one = buff[0]
+                    one_angle = angles[0]
+                    one_distance = distances[0]
+                    one_quality = getattr(buff[0], 'quality', 'n/a')
                     _debug_log(
                         f"scan_round suspicious count={count} valid_nonzero={valid_nonzero} "
-                        f"angle={one.angle:.2f} distance={one.distance:.2f} quality={getattr(one, 'quality', 'n/a')} "
+                        f"angle={one_angle:.2f} distance={one_distance:.2f} quality={one_quality} "
                         f"mode={mode}"
                     )
                 elif any((a < 0.0 or a > 360.0) for a in angles):

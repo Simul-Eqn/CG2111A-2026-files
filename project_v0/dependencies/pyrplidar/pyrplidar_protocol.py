@@ -277,6 +277,8 @@ class PyRPlidarScanMode:
 
 class PyRPlidarMeasurement:
 
+    NORMAL_MAX_DISTANCE_MM = 12000.0
+
     @staticmethod
     def is_valid_raw_bytes(raw_bytes):
         if raw_bytes is None or len(raw_bytes) != 5:
@@ -289,7 +291,19 @@ class PyRPlidarMeasurement:
         # RPLIDAR normal measurement sanity bits:
         # - S and !S must be complementary
         # - check bit must be 1
-        return (start_flag != not_start_flag) and (check_bit == 1)
+        if not ((start_flag != not_start_flag) and (check_bit == 1)):
+            return False
+
+        angle = ((raw_bytes[1] >> 1) + (raw_bytes[2] << 7)) / 64.0
+        distance = (raw_bytes[3] + (raw_bytes[4] << 8)) / 4.0
+
+        # Reject obviously corrupted decoded values so start_scan can resync.
+        if angle < 0.0 or angle >= 360.0:
+            return False
+        if distance < 0.0 or distance > PyRPlidarMeasurement.NORMAL_MAX_DISTANCE_MM:
+            return False
+
+        return True
 
     def __init__(self, raw_bytes=None, measurement_hq=None):
         if raw_bytes is not None:
