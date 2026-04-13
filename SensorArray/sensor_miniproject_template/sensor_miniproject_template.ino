@@ -58,9 +58,9 @@ struct ColorRef {
 #define BLUE_MIN 6000.0
 #define BLUE_MAX 30000.0
 
-ColorRef RED_REF   = {(5600-RED_MIN)/RED_MAX, (1900-GREEN_MIN)/GREEN_MAX, (9000-BLUE_MIN)/BLUE_MAX};
-ColorRef GREEN_REF = {(3590-RED_MIN)/RED_MAX, (4780-GREEN_MIN)/GREEN_MAX, (11450-BLUE_MIN)/BLUE_MAX};
-ColorRef BLUE_REF  = {(3240-RED_MIN)/RED_MAX, (5760-GREEN_MIN)/GREEN_MAX, (16880-BLUE_MIN)/BLUE_MAX};
+ColorRef RED_REF   = {(5600-RED_MIN)/(RED_MAX-RED_MIN), (1900-GREEN_MIN)/(GREEN_MAX-GREEN_MIN), (9000-BLUE_MIN)/(BLUE_MAX-BLUE_MIN)};
+ColorRef GREEN_REF = {(3590-RED_MIN)/(RED_MAX-RED_MIN), (4780-GREEN_MIN)/(GREEN_MAX-GREEN_MIN), (11450-BLUE_MIN)/(BLUE_MAX-BLUE_MIN)};
+ColorRef BLUE_REF  = {(3240-RED_MIN)/(RED_MAX-RED_MIN), (5760-GREEN_MIN)/(GREEN_MAX-GREEN_MIN), (16880-BLUE_MIN)/(BLUE_MAX-BLUE_MIN)};
 
 int motorSpeed = 150;
 //uint16_t lastDebounceTime = 0; //debounce variable
@@ -386,9 +386,9 @@ static void readColorChannels(uint32_t *r, uint32_t *g, uint32_t *b, uint32_t *c
     _delay_ms(5);
     *b = measureChannel100ms() * 10;   // Hz
 
-    float rN = (*r-RED_MIN) / RED_MAX;
-    float gN = (*g-GREEN_MIN) / GREEN_MAX;
-    float bN = (*b-BLUE_MIN) / BLUE_MAX;
+    float rN = (*r-RED_MIN) / (RED_MAX-RED_MIN);
+    float gN = (*g-GREEN_MIN) / (GREEN_MAX-GREEN_MIN);
+    float bN = (*b-BLUE_MIN) / (BLUE_MAX-BLUE_MIN);
 
     float dRed   = colorDistance(rN, gN, bN, RED_REF);
     float dGreen = colorDistance(rN, gN, bN, GREEN_REF);
