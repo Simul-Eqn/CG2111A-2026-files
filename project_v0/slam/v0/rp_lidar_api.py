@@ -110,6 +110,7 @@ def scan_rounds(lidar, mode):
     buff = []
     started = False
     round_index = 0
+    dropped_rounds = 0
     for meas in scan_iter:
         if meas.start_flag:
             # A start_flag marks the beginning of a new rotation.
@@ -118,6 +119,67 @@ def scan_rounds(lidar, mode):
                 round_index += 1
                 angles = [m.angle for m in buff]
                 distances = [m.distance for m in buff]
+
+                if USE_EXPRESS_SCAN:
+                    filter_enable = EXPRESS_FILTER_ENABLE
+                    max_distance_mm = EXPRESS_MAX_DISTANCE_MM
+                    min_points = EXPRESS_MIN_POINTS_PER_ROUND
+                    filter_profile = "express"
+                else:
+                    filter_enable = NONEXPRESS_FILTER_ENABLE
+                    max_distance_mm = NONEXPRESS_MAX_DISTANCE_MM
+                    min_points = NONEXPRESS_MIN_POINTS_PER_ROUND
+                    filter_profile = "normal"
+
+                if filter_enable:
+                    filtered_angles = []
+                    filtered_distances = []
+                    wrapped_angles = 0
+                    dropped_distance = 0
+                    dropped_angle = 0
+
+                    for angle, distance in zip(angles, distances):
+                        if distance < 0 or distance > max_distance_mm:
+                            dropped_distance += 1
+                            continue
+
+                        if -ANGLE_WRAP_TOLERANCE_DEG <= angle < 0.0:
+                            angle += 360.0
+                            wrapped_angles += 1
+                        elif 360.0 <= angle < (360.0 + ANGLE_WRAP_TOLERANCE_DEG):
+                            angle -= 360.0
+                            wrapped_angles += 1
+                        elif angle < 0.0 or angle >= 360.0:
+                            dropped_angle += 1
+                            continue
+
+                        filtered_angles.append(angle)
+                        filtered_distances.append(distance)
+
+                    if wrapped_angles > 0 or dropped_angle > 0 or dropped_distance > 0:
+                        _debug_log(
+                            f"scan_round sanitize profile={filter_profile} idx={round_index} wrapped={wrapped_angles} "
+                            f"drop_angle={dropped_angle} drop_distance={dropped_distance} "
+                            f"before={len(angles)} after={len(filtered_angles)} mode={mode}"
+                        )
+
+                    if len(filtered_angles) < min_points:
+                        dropped_rounds += 1
+                        _debug_log(
+                            f"scan_round dropped profile={filter_profile} idx={round_index} count={len(filtered_angles)} "
+                            f"drop_total={dropped_rounds} min_points={min_points} mode={mode}"
+                        )
+                        buff = [meas]
+                        started = True
+                        continue
+
+                    if dropped_rounds > 0:
+                        _debug_log(f"scan_round recovered dropped_total={dropped_rounds} mode={mode}")
+                        dropped_rounds = 0
+
+                    angles = filtered_angles
+                    distances = filtered_distances
+
                 count = len(distances)
                 valid_nonzero = sum(1 for d in distances if d > 0)
 
@@ -169,6 +231,13 @@ _motor_speed = 150
 DEBUG_LIDAR = "--debug" in sys.argv #os.getenv("RP_LIDAR_DEBUG", "1") not in ("0", "false", "False", "no", "NO")
 SCAN_DEBUG_EVERY_N = max(1, int(os.getenv("RP_LIDAR_SCAN_DEBUG_EVERY_N", "20")))
 NETWORK_SLOW_DRAIN_MS = float(os.getenv("RP_LIDAR_SLOW_DRAIN_MS", "50"))
+EXPRESS_FILTER_ENABLE = os.getenv("RP_LIDAR_EXPRESS_FILTER", "1") not in ("0", "false", "False", "no", "NO")
+EXPRESS_MAX_DISTANCE_MM = float(os.getenv("RP_LIDAR_EXPRESS_MAX_DISTANCE_MM", "12000"))
+EXPRESS_MIN_POINTS_PER_ROUND = max(1, int(os.getenv("RP_LIDAR_EXPRESS_MIN_POINTS", "20")))
+NONEXPRESS_FILTER_ENABLE = os.getenv("RP_LIDAR_NONEXPRESS_FILTER", "1") not in ("0", "false", "False", "no", "NO")
+NONEXPRESS_MAX_DISTANCE_MM = float(os.getenv("RP_LIDAR_NONEXPRESS_MAX_DISTANCE_MM", "12000"))
+NONEXPRESS_MIN_POINTS_PER_ROUND = max(1, int(os.getenv("RP_LIDAR_NONEXPRESS_MIN_POINTS", "20")))
+ANGLE_WRAP_TOLERANCE_DEG = float(os.getenv("RP_LIDAR_ANGLE_WRAP_TOLERANCE_DEG", "1.0"))
 
 
 def _debug_log(msg):
