@@ -40,11 +40,14 @@ python reference_rp_lidar_api_sim.py
 
 settings.py change LIDAR_OFFSET_DEG = 0
 
+
+## ROBOT SETUP 
+
 ### Real Robot 
-```
-source ./../../../SensorArray/env/bin/activate
+
+```bash
 SET SLAM_SERVER_IP=[camera receiver ip address]
-python rp_lidar_api.py
+python rp_lidar_api.py --debug 
 ```
 
 settings.py change LIDAR_OFFSET_DEG = 180
@@ -52,13 +55,8 @@ settings.py change LIDAR_OFFSET_DEG = 180
 
 ### Main terminal setup 
 
-```python slam.py``` 
-
-100.109.145.53
-
-Or with custom API server: (this is the raspberrypi's ip address)
 ```bash
-set MPSV0_SERVER_IP=127.0.0.1
+set MPSV0_SERVER_IP=[raspberry pi's ip address]
 python slam.py
 ```
 
@@ -67,33 +65,24 @@ Note: start `rp_lidar_api.py` (or the simulator) before `slam.py`; otherwise
 
 ### Second terminal setup 
 
-```python second_terminal/second_terminal.py``` 
-
-Or with custom relay host:
 ```bash
-set SECOND_TERM_HOST=127.0.0.1
+set SECOND_TERM_HOST=[main terminal ip address]
 python second_terminal/second_terminal.py
 ```
 
 If second terminal disconnects, you can reconnect by rerunning the command above.
 
-### Camera receive terminal setup 
+### Camera receiver terminal setup 
 
 ```python camera_receiver_server.py``` 
 
 
-## Cartographer variation
-
-For the alternative mapping setup, see `cartographer_variant/README.md`.
 
 
-
+## Notes 
 MOVEMENT MOTOR SPEED: 130 is good 
 
 If jumping aound: either increase MIN_VALID or decrease MAX_TRANSLATION or something 
-
-
-## Weird issues 
 
 export RP_LIDAR_SKIP_TINY_ROUNDS=0 
 
